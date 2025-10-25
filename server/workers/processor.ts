@@ -4,6 +4,7 @@ import { analyzeWithAI } from "./ai-analyzer";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { jobRuns } from "@shared/schema";
+import { syncJobToSupabase, syncFileToSupabase, syncKbEntryToSupabase, uploadFileToSupabaseStorage } from "../supabase-sync";
 
 async function processTextExtraction(tenantId: string, jobId: string, fileId: string) {
   try {
@@ -15,6 +16,12 @@ async function processTextExtraction(tenantId: string, jobId: string, fileId: st
     const text = await extractText(file.uploadPath, file.mimeType);
     await storage.updateFileStatus(tenantId, fileId, "extracted", text);
 
+    // Sync updated file to Supabase
+    const updatedFile = await storage.getFile(tenantId, fileId);
+    if (updatedFile) {
+      await syncFileToSupabase(updatedFile);
+    }
+
     const analysisJob = await storage.createJob({
       tenantId,
       kind: "ai_analyze",
@@ -22,6 +29,9 @@ async function processTextExtraction(tenantId: string, jobId: string, fileId: st
       priority: 100,
       metadata: { fileId },
     });
+
+    // Sync new job to Supabase for real-time updates
+    await syncJobToSupabase(analysisJob);
 
     console.log(`[Worker] Created analysis job ${analysisJob.id} for file ${fileId}`);
     return { success: true, nextJobId: analysisJob.id };
@@ -59,6 +69,22 @@ async function processAIAnalysis(tenantId: string, jobId: string, fileId: string
     });
 
     await storage.updateFileStatus(tenantId, fileId, "analyzed");
+
+    // Sync KB entry to Supabase
+    await syncKbEntryToSupabase(kbEntry);
+
+    // Upload file to Supabase Storage
+    const storagePath = await uploadFileToSupabaseStorage(
+      file.id,
+      file.uploadPath,
+      file.originalName
+    );
+
+    // Update file with storage path in Supabase
+    const finalFile = await storage.getFile(tenantId, fileId);
+    if (finalFile) {
+      await syncFileToSupabase(finalFile);
+    }
 
     console.log(`[Worker] Created KB entry ${kbEntry.id} for file ${fileId}`);
     return { success: true, kbEntryId: kbEntry.id };
@@ -99,11 +125,23 @@ export async function processJobRuns() {
         await storage.updateJobRunStatus(run.tenantId, run.id, "succeeded", result);
         await storage.updateJobStatus(run.tenantId, job.id, "succeeded");
 
+        // Sync updated job status to Supabase
+        const updatedJob = await storage.getJob(run.tenantId, job.id);
+        if (updatedJob) {
+          await syncJobToSupabase(updatedJob);
+        }
+
         console.log(`[Worker] Completed job run ${run.id}`);
       } catch (error: any) {
         console.error(`[Worker] Job run ${run.id} failed:`, error);
         await storage.updateJobRunStatus(run.tenantId, run.id, "failed", null, error.message);
         await storage.updateJobStatus(run.tenantId, run.jobId, "failed", error.message);
+
+        // Sync failed job status to Supabase
+        const failedJob = await storage.getJob(run.tenantId, run.jobId);
+        if (failedJob) {
+          await syncJobToSupabase(failedJob);
+        }
       }
     }
   } catch (error) {

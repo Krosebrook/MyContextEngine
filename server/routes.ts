@@ -5,6 +5,7 @@ import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
 import { z } from "zod";
+import { syncFileToSupabase, syncJobToSupabase } from "./supabase-sync";
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -44,6 +45,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "uploaded",
       });
 
+      // Sync new file to Supabase
+      await syncFileToSupabase(file);
+
       const job = await storage.createJob({
         tenantId,
         kind: "text_extract",
@@ -51,6 +55,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         priority: 100,
         metadata: { fileId: file.id },
       });
+
+      // Sync new job to Supabase for real-time updates
+      await syncJobToSupabase(job);
 
       res.json({ file, job });
     } catch (error: any) {

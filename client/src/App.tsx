@@ -8,7 +8,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
-import Jobs from "@/pages/Jobs";
+import JobsRealtime from "@/pages/JobsRealtime";
 import Files from "@/pages/Files";
 import KnowledgeBase from "@/pages/KnowledgeBase";
 import Monitoring from "@/pages/Monitoring";
@@ -19,7 +19,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/files" component={Files} />
       <Route path="/kb" component={KnowledgeBase} />
-      <Route path="/jobs" component={Jobs} />
+      <Route path="/jobs" component={JobsRealtime} />
       <Route path="/monitoring" component={Monitoring} />
       <Route component={NotFound} />
     </Switch>
