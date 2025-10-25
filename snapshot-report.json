@@ -1,0 +1,271 @@
+{
+  "metadata": {
+    "snapshot_id": "km-ai-sys-20251025",
+    "snapshot_version": "v1.1",
+    "collected_at": "2025-10-25T22:57:00Z",
+    "source_systems": [
+      "repo://replit-workspace",
+      "chat://agent-analysis"
+    ],
+    "domain": "AI-Powered Knowledge Management SaaS",
+    "notes": {
+      "assumptions": [
+        "Staging environment mirrors production setup",
+        "Multi-tenant architecture in place but auth not yet implemented",
+        "Default tenant 'default-tenant' used for all operations",
+        "Supabase tables and real-time configured by user in dashboard",
+        "OpenAI SDK installed but integration not yet active"
+      ],
+      "gaps": [
+        "No CI/CD pipeline configured",
+        "No formal rollback strategy beyond retry logic",
+        "No distributed tracing or correlation IDs",
+        "RTO/RPO not formally defined",
+        "Authentication layer (Replit Auth) planned but not implemented",
+        "No automated testing (unit, e2e, load) discovered",
+        "API rate limiting and quota management not implemented",
+        "No structured monitoring/alerting beyond console logs",
+        "Cost tracking and budget alerts not automated"
+      ],
+      "telemetry": {
+        "mode": "passive",
+        "env_detect": {
+          "model_name": "claude-3.5-sonnet",
+          "temperature": "0.0",
+          "context_limit": "200000",
+          "tools_available": [
+            "read",
+            "write",
+            "edit",
+            "search_codebase",
+            "grep",
+            "bash",
+            "execute_sql_tool",
+            "refresh_all_logs"
+          ],
+          "platform_hint": "replit"
+        },
+        "tuning_applied": "none",
+        "hashing": {
+          "pii_hash": "sha256-8"
+        },
+        "readonly": false
+      }
+    }
+  },
+  "functional_tech": {
+    "features": [
+      "Drag-and-drop file upload with 100MB limit (PDF, images, docs, code, zip)",
+      "Automatic text extraction from uploaded files (simplified implementation)",
+      "Multi-provider AI analysis (Gemini 2.0 Flash, Claude 3.7 Sonnet) with structured JSON output",
+      "AI-generated metadata: title, summary, category (9 types), tags",
+      "Job queue orchestration with dispatcher (10s interval) and processor (5s interval)",
+      "Real-time job status updates via Supabase subscriptions (no polling)",
+      "Knowledge base grid view with search and category filters",
+      "Dual-database architecture: Neon for transactions, Supabase for real-time/storage",
+      "File storage to Supabase Storage buckets after AI processing",
+      "Multi-tenant data isolation with application-layer row-level security",
+      "Dashboard metrics: total files, KB entries, jobs, success rate",
+      "Job management: retry failed jobs (max 3 attempts), cancel queued/running jobs",
+      "Provider selection UI supporting multiple AI models"
+    ],
+    "integrations": [
+      {
+        "name": "Neon PostgreSQL",
+        "type": "internal",
+        "privilege": "admin"
+      },
+      {
+        "name": "Supabase PostgreSQL + Realtime",
+        "type": "internal",
+        "privilege": "admin"
+      },
+      {
+        "name": "Supabase Storage",
+        "type": "internal",
+        "privilege": "write"
+      },
+      {
+        "name": "Google Gemini API (@google/genai)",
+        "type": "external",
+        "privilege": "write"
+      },
+      {
+        "name": "Anthropic Claude API (@anthropic-ai/sdk)",
+        "type": "external",
+        "privilege": "write"
+      },
+      {
+        "name": "OpenAI API (openai SDK)",
+        "type": "external",
+        "privilege": "write"
+      }
+    ],
+    "outputs": [
+      "REST API endpoints (/api/files, /api/jobs, /api/kb, /api/stats)",
+      "React SPA with Vite (wouter routing, TanStack Query state)",
+      "Real-time WebSocket subscriptions (Supabase Realtime)",
+      "Signed file download URLs (Supabase Storage, 1hr TTL)",
+      "JSON structured AI analysis results"
+    ],
+    "userflows": [
+      "Upload file → Text extraction queued → AI analysis queued → KB entry created → Real-time status updates",
+      "Dashboard → View metrics (files, jobs, KB entries, success rate) → Navigate to pages",
+      "Jobs page → Watch live status (● Live indicator) → Retry failed / Cancel running",
+      "Knowledge Base → Search/filter by category → View AI-generated titles, summaries, tags",
+      "Files page → Drag-drop upload → Progress tracking → Job creation confirmation"
+    ],
+    "ux_assets": [
+      "shadcn/ui component library (Radix UI primitives)",
+      "Carbon Design System aesthetic (IBM Plex Sans typography)",
+      "Tailwind CSS with custom HSL color variables",
+      "Lucide React icons",
+      "Light/dark mode theme toggle",
+      "Real-time status badges with animations (queued, running, succeeded, failed, canceled)"
+    ],
+    "docs": [
+      "replit.md - Comprehensive architecture and technical documentation",
+      "SUPABASE_SETUP.md - Real-time and storage setup instructions",
+      "supabase-schema.sql - Database schema DDL for Supabase",
+      "package.json - Dependencies and npm scripts"
+    ]
+  },
+  "delivery_ops": {
+    "cicd": [
+      "No automated CI/CD pipeline configured",
+      "Manual deployment via Replit platform",
+      "npm run build → Vite frontend build + esbuild server bundle",
+      "npm run start → Production mode with NODE_ENV=production"
+    ],
+    "testing": [
+      "No automated testing framework discovered",
+      "Manual testing via Replit development environment",
+      "No unit tests (Vitest/Jest)",
+      "No e2e tests (Playwright)",
+      "No load/performance tests"
+    ],
+    "releases": [
+      "No formal release cadence defined",
+      "No canary/blue-green deployment strategy",
+      "No feature flags implementation",
+      "No version tagging or changelog process"
+    ],
+    "adrs": [
+      "2025-10-25 Dual-database architecture: Neon for processing, Supabase for real-time",
+      "2025-10-25 Multi-provider AI: Gemini primary, Claude fallback, OpenAI planned",
+      "2025-10-25 Job processing pipeline: Dispatcher → Processor → Workers (text extraction → AI analysis)",
+      "2025-10-25 Application-layer multi-tenancy with tenantId filtering"
+    ],
+    "repo": {
+      "structure": "client/src/*, server/*, shared/*, uploads/, dist/ (build output)",
+      "issues": 0,
+      "open_prs": 0
+    }
+  },
+  "ai_automation": {
+    "agents": [
+      "Dispatcher agent (server/workers/dispatcher.ts): Dequeues jobs every 10s, creates job runs",
+      "Processor agent (server/workers/processor.ts): Executes job runs every 5s, handles text extraction and AI analysis",
+      "Text Extractor (server/workers/text-extractor.ts): Simplified text extraction from files",
+      "AI Analyzer (server/workers/ai-analyzer.ts): Calls Gemini/Claude to generate title, summary, category, tags"
+    ],
+    "prompts": [
+      "AI analysis prompt template: Analyze file content → Structured JSON (title, summary, category from 9 types, tags)",
+      "Category inference: Code, Documentation, Data, Image, Document, Spreadsheet, Presentation, Archive, Other",
+      "Fallback prompt: Uses filename + first 200 chars when AI fails"
+    ],
+    "boundaries": {
+      "read_ops": [
+        "db.select() on Neon: jobs, files, kb_entries, job_runs (filtered by tenantId)",
+        "db.select() on Supabase: jobs, files, kb_entries (real-time subscriptions)",
+        "fs.readFileSync() for uploaded files in uploads/ directory",
+        "Supabase Storage: createSignedUrl() for file downloads (1hr expiry)"
+      ],
+      "write_ops": [
+        "db.insert() on Neon: users, files, jobs, job_runs, kb_entries",
+        "db.update() on Neon: job status, file status, job run status",
+        "Supabase.upsert() on jobs, files, kb_entries (sync from Neon)",
+        "Supabase Storage.upload() to organized-files bucket",
+        "Gemini API: generateContent() with 10KB text limit from files",
+        "Claude API: messages.create() with 1024 max_tokens for structured output",
+        "Multer file uploads to uploads/ directory (100MB limit)"
+      ],
+      "sandboxing": [
+        "Tenant-scoped database queries (WHERE tenant_id = $1)",
+        "No cross-tenant data access enforced at application layer",
+        "AI text input clamped to 10KB to control costs",
+        "File upload size limited to 100MB",
+        "Job retry max attempts = 3 to prevent infinite loops",
+        "Supabase Storage paths namespaced by tenantId"
+      ],
+      "escalation": [
+        "Manual intervention required for failed jobs after 3 retry attempts",
+        "No automated escalation or alerting system",
+        "Console logs for debugging (no structured logging/monitoring)",
+        "Database mutations logged to console but no audit trail"
+      ]
+    }
+  },
+  "reliability": {
+    "observability": [
+      "Console.log statements throughout codebase (no structured logging)",
+      "Supabase Realtime for live UI updates (WebSocket subscriptions)",
+      "No distributed tracing or correlation IDs",
+      "No metrics collection (Prometheus, Datadog, etc.)",
+      "No log aggregation (Splunk, ELK, CloudWatch)",
+      "Frontend error boundaries via @replit/vite-plugin-runtime-error-modal",
+      "No uptime monitoring or synthetic checks"
+    ],
+    "debug": [
+      "/api/stats endpoint: Dashboard metrics (files, jobs, KB entries, success rate)",
+      "/api/jobs?status=failed: Query failed jobs for debugging",
+      "Job error messages stored in jobs.error column",
+      "Browser console logs for frontend debugging",
+      "Supabase dashboard for real-time table inspection",
+      "No /health or /debug endpoints",
+      "No admin panel or debug UI"
+    ],
+    "rollback": [
+      "manual_hotfix",
+      "Job retry mechanism (max 3 attempts) for transient failures",
+      "No blue/green deployment infrastructure",
+      "No canary releases",
+      "No feature flags for gradual rollouts",
+      "No database migration rollback procedures",
+      "Replit platform-level rollback via Replit Deployments (user-managed)"
+    ],
+    "rto_rpo": {
+      "rto_minutes": 0,
+      "rpo_minutes": 0
+    }
+  },
+  "org_context": {
+    "team_size": 1,
+    "ownership": [
+      "full-stack (frontend, backend, infrastructure, AI integration)"
+    ],
+    "reviews": [
+      "No formal PR review process (single developer)",
+      "No branch protection rules",
+      "No code review requirements"
+    ]
+  },
+  "economics": {
+    "cloud_costs": 0,
+    "api_costs": 0,
+    "quotas": [
+      "Gemini API: Rate limits vary by model (gemini-2.0-flash-exp: unknown, likely 60-1000 RPM)",
+      "Claude API: Rate limits vary by tier (claude-3-7-sonnet: unknown, likely 50-1000 RPM)",
+      "Supabase Free Tier: 500MB database, 1GB storage, 2GB bandwidth/month",
+      "Neon Free Tier: 512MB storage, 3 compute hours/month",
+      "Replit Cycles usage for deployment and autoscaling"
+    ],
+    "budgets": [
+      "No formal AI API budget defined (user should set LLM ≤ $X/mo)",
+      "No cost tracking or budget alerts configured",
+      "Recommend: Monitor Gemini/Claude API usage dashboards",
+      "Recommend: Set up Supabase usage alerts",
+      "Recommend: Track Neon compute hours"
+    ]
+  }
+}
