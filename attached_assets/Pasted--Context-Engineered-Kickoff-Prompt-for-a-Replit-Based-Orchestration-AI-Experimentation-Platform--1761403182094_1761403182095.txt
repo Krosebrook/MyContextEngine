@@ -1,0 +1,250 @@
+🎬 Context‑Engineered Kickoff Prompt for a Replit‑Based Orchestration & AI Experimentation Platform
+🎯 Executive Summary
+
+You are a senior full‑stack engineer tasked with building a multi‑tenant orchestration and AI experimentation platform entirely on Replit.com. Replit provides integrated Neon Postgres databases and built‑in authentication
+replit.com
+, a Replit Agent that can generate UI and handle deployment
+replit.com
+, and first‑class support for Next.js with autoscaling
+docs.replit.com
+. Your mission is to deliver a system that schedules and executes data‑processing jobs, runs offline and online LLM evaluations, offers a secure local file‑sync agent, and integrates multiple model providers (Gemini, Claude, ChatGPT) — all while ensuring security, scalability, and maintainability.
+
+🧱 1. Foundation: Repository, Schema & Database
+Objectives
+
+Scaffold a monorepo containing all services (web, workers, CLI, libs) under /apps and /packages.
+
+Define multi‑tenant database schemas (jobs, job_runs, projects, eval_suites, eval_runs, run_samples, feature_flags, events) in sql/001_init_orch_and_sandbox.sql.
+
+Enforce tenant isolation in application logic using Replit Auth’s tenant_id claims
+replit.com
+.
+
+Optionally set up ClickHouse for high‑volume analytics with MergeTree tables.
+
+Unknown Unknowns
+
+Data privacy & compliance: Ensure GDPR/CCPA compliance; implement audit trails on sensitive tables.
+
+Schema evolution: Plan for future migrations (e.g., adding new job types or experiments) without downtime.
+
+Database limits: Understand Neon connection limits and adjust pooling accordingly
+docs.replit.com
+.
+
+Implementation Considerations
+
+Use Replit’s Secrets Manager for .env values; never commit secrets to git.
+
+Provide indexing on tenant_id, status, and created_at to prevent full table scans.
+
+Write docs/ARCHITECTURE.md with ER diagrams and descriptions of tenant isolation, RLS via application code, and optional ClickHouse integration.
+
+⚙️ 2. Execution Layer: Schedulers & Workers
+Objectives
+
+Implement a dispatcher that runs via Replit Workflows on a schedule (e.g., every minute) to dequeue jobs, plan shards, and enqueue job_runs.
+
+Build workers that fetch queued shards, read from Neon, transform and insert into ClickHouse (sync or async), checkpoint progress, and handle idempotent retries.
+
+Provide evaluation runners for offline batch experiments and online A/B/interleaving/bandit tests.
+
+Unknown Unknowns
+
+Resource limits: Each Replit Repl runs on a single vCPU
+docs.replit.com
+; heavy workloads may need to throttle concurrency or split across multiple Repls.
+
+Backpressure: Plan how to detect and respond to ClickHouse merge backlog; consider reducing parallelism or switching to synchronous inserts.
+
+Implementation Considerations
+
+Use pooled connections (pg.Pool) and release them promptly.
+
+Store checkpoints (OFFSET or timestamp) in job_runs to resume gracefully after failure.
+
+Instrument scripts with OpenTelemetry; include tenant/job/shard attributes for visibility.
+
+Store error states in job_runs.error for troubleshooting.
+
+🌐 3. API Surface & SDKs
+Objectives
+
+Expose secure API endpoints (via Next.js API routes) for job management (create, cancel, retry, get), experiment management, and file‑sync actions.
+
+Implement client SDKs with typed responses and retry logic for orchestrator and sandbox services.
+
+Unknown Unknowns
+
+Rate limiting: Determine per‑tenant or per‑user rate limits to prevent abuse.
+
+GraphQL vs REST: If future clients require more flexibility, consider GraphQL; design your REST endpoints to allow easy migration.
+
+Implementation Considerations
+
+Extract tenant_id from Replit Auth in every request; reject requests missing this claim.
+
+Validate payloads with Zod; return 400 errors with meaningful messages on invalid input.
+
+Use a shared Postgres pool; do not instantiate new connections per request.
+
+Document your API in docs/API.md with request/response examples and error codes.
+
+🎨 4. UI/UX: Dashboards & Composers
+Objectives
+
+Build Next.js pages for Jobs List, Job Composer, Job Detail, Experiments Dashboard, Suite Composer, Run Detail, and FileBridge management.
+
+Use TanStack Query for data fetching/caching and shadcn/ui components for a polished look.
+
+Ensure accessibility, responsive design, and skeleton loaders for asynchronous states.
+
+Unknown Unknowns
+
+Real‑time updates: Decide between SSE, WebSockets, or polling for reflecting shard/job status and evaluation progress.
+
+Multi‑tenant dashboards: If multiple tenants are visible to admins, design filters and scopes accordingly.
+
+Implementation Considerations
+
+Use layouts for shared navigation; break pages into server and client components for SSR performance.
+
+Provide forms with validation and inline error messages.
+
+Use charts (one per metric) for throughput, latency, pass rates, etc.
+
+Ensure secrets (API keys, tokens) never appear in client code; use server actions or API routes for protected operations.
+
+🛡️ 5. Operationalization: Observability, CI/CD & Runbooks
+Objectives
+
+Instrument all services with OpenTelemetry; configure a collector to forward traces/metrics to your observability backend.
+
+Define GitHub Actions for lint, test, typecheck, smoke tests, and deployment to Replit with autoscaling settings
+docs.replit.com
+.
+
+Provide seeding scripts and smoke tests for orchestrator and sandbox flows.
+
+Write runbooks for orchestrator operations (scaling, backpressure), experimentation usage, file‑bridge operations, and a comprehensive security checklist.
+
+Unknown Unknowns
+
+Incident response: Establish on‑call procedures and alerting thresholds for job failures, evaluation regressions, or file‑sync issues.
+
+Secrets rotation: Plan periodic rotation schedules for API keys and device tokens; automate alerts when nearing expiry.
+
+Implementation Considerations
+
+Secret scanning: Add gitleaks to CI.
+
+Use unique tenant IDs for test environments to avoid contaminating production data.
+
+Document onboarding and troubleshooting steps in runbooks.
+
+🔄 6. Local FileBridge Extension
+Objectives
+
+Develop a Node CLI for local directory sync (scan, diff, upload, download) with TLS encryption and optional Electron tray UI.
+
+Build server APIs to register devices, issue signed sync orders, store manifests, and stream events.
+
+Create UI pages for device management, directory grants, sync operations, event logs, and metrics.
+
+Unknown Unknowns
+
+Network latency: For large file sync, support resumable uploads and adjustable chunk sizes.
+
+File privacy: Default to metadata‑only indexing; require explicit opt‑in for content upload; exclude sensitive files (e.g., .env).
+
+Multi‑OS support: Handle path normalization and case sensitivity across Windows, macOS, and Linux.
+
+Implementation Considerations
+
+Short‑lived orders (≤10 min); tokens rotate every 24 h; verify signatures server‑side.
+
+Device registration via Replit Auth; persist device state in local SQLite or LevelDB.
+
+Use WebSockets for real‑time file events; fallback to polling if necessary.
+
+Rate limit file uploads to avoid saturating bandwidth.
+
+💡 7. Google AI Studio (Gemini) Integration
+Objectives
+
+Create a Gemini adapter supporting streaming and batch generation with safety settings and backoff.
+
+Store API keys server‑side; never expose in client bundles.
+
+Add provider selection and safety settings in the UI; record token usage and cost.
+
+Unknown Unknowns
+
+Quota management: Implement logic to downgrade from Pro to Flash or Flash‑Lite when hitting TPM/RPM quotas; log fallback events.
+
+Safety overrides: Some safety categories cannot be fully disabled; ensure the UI reflects these constraints and logs when content is blocked.
+
+Implementation Considerations
+
+Use a central token‑budget manager (see Prompt 8) to manage RPM/TPM budgets.
+
+Provide a CLI/test script to evaluate Gemini with sample inputs; include results in CI if key is provided.
+
+Respect AI Studio terms of service; ensure end users acknowledge Gemini’s usage policy.
+
+🤖 8. Anthropic Claude & OpenAI ChatGPT Integration
+Objectives
+
+Implement adapters for Anthropic (claude-3.7-sonnet, claude-3.7-haiku) and OpenAI (gpt-4o, gpt-4o-mini), normalizing tool/function calling semantics.
+
+Extend API routes and UI to allow selecting providers, specifying tool schemas, and setting budgets.
+
+Implement a token budget manager that controls RPM/TPM across providers, with fallback logic and cost tracking.
+
+Unknown Unknowns
+
+Model updates: Plan for frequent provider updates (e.g., Claude 4, GPT‑5); design your registry and adapters to be easily extensible.
+
+Tool schema complexity: Provide UI helpers to validate JSON schemas; handle provider differences gracefully (e.g., tool naming conventions).
+
+Implementation Considerations
+
+Store all API keys in Replit secrets; load them only server side.
+
+Use Zod to validate tool schemas; document tool choice semantics (auto, required, specific).
+
+Provide cost estimation for each run; alert users when budgets exceed thresholds.
+
+🚧 Bringing It All Together – Unknown Unknowns & Hidden Work
+
+Compliance: Audit your design against SOC2, GDPR, and relevant regulations. Document how personal data (user inputs, evaluation outputs) is stored, processed, and deleted.
+
+Disaster Recovery: Plan backup strategies for Neon Postgres and ClickHouse. Consider daily snapshots and restore procedures.
+
+Vendor Lock‑in: If Replit’s platform limits your scale, ensure your architecture can migrate to other environments (e.g., Vercel, AWS) with minimal refactoring.
+
+Human Feedback Loop: Integrate user feedback into the evaluation loop; store human ratings in run_samples; use them to refine prompts and models.
+
+Alerting & On‑Call: Configure alerting (e.g., via Slack) for job failures, high error rates, or cost overruns. Provide runbooks for on‑call engineers.
+
+✅ Recommended Action Plan
+
+Scaffold the monorepo with directories and environment templates.
+
+Apply SQL migrations to your Neon DB; seed demo tenants and run sample queries to verify tenant isolation.
+
+Implement dispatcher and worker scripts; test with a small dataset and ClickHouse integration.
+
+Build API routes and typed SDKs for orchestrator, sandbox, and filebridge; test with Postman or curl.
+
+Develop UI pages using Next.js, Tailwind, and shadcn; connect to your API and SDK.
+
+Add observability, CI/CD, and runbooks; verify OTel spans and metrics in your collector.
+
+Implement the FileBridge agent and server endpoints; run local sync tests.
+
+Integrate Gemini, Claude, and OpenAI providers; implement adapters, budget manager, and UI components.
+
+Identify gaps and iterate based on real workloads; ensure compliance, cost control, and scalability.
+
+Use this kickoff prompt as a living document—update it as unknown unknowns surface during development.

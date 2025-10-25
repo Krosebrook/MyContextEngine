@@ -1,0 +1,1256 @@
+Executive Summary
+
+This document expands the original eight prompts into detailed, context‑engineered guidance for building an end‑to‑end orchestration and AI experimentation platform on Replit.com. Replit integrates Neon Postgres and authentication natively
+replit.com
+, offers a built‑in agent for UI generation and deployment
+replit.com
+, and supports running modern frameworks like Next.js with autoscaling
+docs.replit.com
+. Each prompt below is broken down into concrete steps, code skeletons, architectural rationale, implementation considerations, performance/security notes, and recommended next steps. Citations reference authoritative Replit documentation where appropriate.
+
+Prompt 1 – Foundation on Replit: Architecture, Schema & Database
+Objectives & Scope
+
+This prompt covers setting up your repository structure, defining database schemas for multi‑tenant orchestration and experimentation tables, enabling application‑layer RLS based on Replit’s native auth and Neon Postgres
+replit.com
+, and documenting the architecture. It also outlines optional ClickHouse integration for analytics.
+
+Repository Structure
+
+Monorepo vs Multi‑repl: For ease of dependency management and unified CI, use a monorepo containing the web app, server scripts, CLI, and shared libraries. Replit projects (repls) can be created from this repository using separate branches or subdirectories.
+
+Top‑level layout:
+
+/ (repo root)
+├─ sql/                  # Database migrations and seeds
+├─ clickhouse/           # Optional: ClickHouse DDL
+├─ apps/                 # Application code (web, worker, CLI)
+│   ├─ web/              # Next.js app on Replit
+│   ├─ worker/           # Node/Bun scripts for long‑running tasks
+│   └─ filebridge-cli/   # Local sync agent
+├─ packages/
+│   └─ lib/              # Shared TypeScript libraries (SDKs, utils)
+├─ docs/                 # Architecture & runbooks
+├─ .github/workflows/    # CI/CD definitions
+├─ MANIFEST.json         # Generated file manifest with SHA256s
+└─ .env.example          # Environment variables template (no secrets)
+
+Database Schema (Neon Postgres on Replit)
+
+Replit provisions a fully managed Neon Postgres instance with the same capabilities as Supabase’s DB
+replit.com
+. Use Replit’s built‑in auth for user/tenant identification. The SQL below creates all required tables and enforces multi‑tenant isolation using a tenant_id column checked at the application layer:
+
+-- sql/001_init_orch_and_sandbox.sql
+CREATE TABLE tenants (
+  id          UUID PRIMARY KEY,
+  slug        TEXT UNIQUE NOT NULL,
+  owner_id    UUID NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE jobs (
+  id            UUID PRIMARY KEY,
+  tenant_id     UUID REFERENCES tenants(id),
+  kind          TEXT CHECK (kind IN ('neon_to_clickhouse','reindex','custom')),
+  status        TEXT CHECK (status IN ('queued','running','succeeded','failed','canceled')),
+  priority      INT DEFAULT 100,
+  scheduled_at  TIMESTAMPTZ,
+  started_at    TIMESTAMPTZ,
+  finished_at   TIMESTAMPTZ,
+  attempts      INT DEFAULT 0,
+  max_attempts  INT DEFAULT 5,
+  payload       JSONB,
+  batch_size    INT DEFAULT 50000,
+  parallelism   INT DEFAULT 8,
+  dry_run       BOOLEAN DEFAULT FALSE,
+  async_insert  BOOLEAN DEFAULT FALSE,
+  created_by    UUID,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE job_runs (
+  id           UUID PRIMARY KEY,
+  job_id       UUID REFERENCES jobs(id),
+  shard        INT,
+  status       TEXT CHECK (status IN ('queued','running','succeeded','failed','skipped')),
+  attempt      INT,
+  started_at   TIMESTAMPTZ,
+  finished_at  TIMESTAMPTZ,
+  error        JSONB,
+  records_in   INT,
+  records_out  INT,
+  bytes_out    BIGINT,
+  insert_mode  TEXT CHECK (insert_mode IN ('sync','async')),
+  checkpoint   JSONB,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE job_events (
+  id      UUID PRIMARY KEY,
+  job_id  UUID REFERENCES jobs(id),
+  ts      TIMESTAMPTZ DEFAULT NOW(),
+  level   TEXT CHECK (level IN ('info','warn','error')),
+  message TEXT,
+  meta    JSONB
+);
+
+-- Experimentation tables
+CREATE TABLE projects (
+  id        UUID PRIMARY KEY,
+  tenant_id UUID REFERENCES tenants(id),
+  slug      TEXT UNIQUE NOT NULL,
+  owner_id  UUID NOT NULL,
+  created_at TIMESTAMPTZ
+);
+
+CREATE TABLE prompt_versions (
+  id           UUID PRIMARY KEY,
+  project_id   UUID REFERENCES projects(id),
+  name         TEXT NOT NULL,
+  version      INT NOT NULL,
+  body         TEXT NOT NULL,
+  vars         JSONB,
+  is_active    BOOLEAN DEFAULT FALSE,
+  checksum     TEXT,
+  created_by   UUID,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE eval_suites (
+  id              UUID PRIMARY KEY,
+  project_id      UUID REFERENCES projects(id),
+  name            TEXT NOT NULL,
+  mode            TEXT CHECK (mode IN ('offline','online')),
+  primary_metric  TEXT,
+  guardrails      JSONB,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE eval_runs (
+  id               UUID PRIMARY KEY,
+  suite_id         UUID REFERENCES eval_suites(id),
+  prompt_version_id UUID REFERENCES prompt_versions(id),
+  providers        JSONB,
+  dataset_ref      TEXT,
+  interleaving     TEXT CHECK (interleaving IN ('none','team_draft','balanced')),
+  bandit           TEXT CHECK (bandit IN ('none','thompson')),
+  traffic_percent  INT,
+  status           TEXT CHECK (status IN ('queued','running','succeeded','failed','canceled')),
+  started_at       TIMESTAMPTZ,
+  finished_at      TIMESTAMPTZ,
+  stats            JSONB,
+  cost_cents       INT,
+  rollback_of      UUID,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE run_samples (
+  id         UUID PRIMARY KEY,
+  run_id     UUID REFERENCES eval_runs(id),
+  input      JSONB,
+  outputs    JSONB,
+  assertions JSONB,
+  human_grade INT,
+  latency_ms  INT,
+  token_in    INT,
+  token_out   INT,
+  pass        BOOLEAN,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE feature_flags (
+  id         UUID PRIMARY KEY,
+  project_id UUID REFERENCES projects(id),
+  key        TEXT,
+  variant    TEXT,
+  rollout    INT CHECK (rollout BETWEEN 0 AND 100),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE events (
+  id         UUID PRIMARY KEY,
+  project_id UUID REFERENCES projects(id),
+  run_id     UUID REFERENCES eval_runs(id),
+  ts         TIMESTAMPTZ,
+  level      TEXT,
+  message    TEXT,
+  meta       JSONB
+);
+
+Row‑Level Security via Application Logic
+
+Replit does not provide database‑level RLS like Supabase. You must enforce tenant isolation in your application code. Every query should include a WHERE tenant_id = currentTenant() clause or use an ORM that injects tenant conditions automatically. Use Replit Auth to extract the user’s tenant_id claim
+replit.com
+.
+
+ClickHouse (Optional)
+
+If you retain ClickHouse for analytics, define schemas under clickhouse/schema.sql using MergeTree tables with partitions on toDate(timestamp) and primary keys on (tenant_id, timestamp, id). Describe batch insert strategies (10k–100k rows per insert) and deduplication keys.
+
+Architecture Documentation
+
+Write docs/ARCHITECTURE.md explaining:
+
+Monorepo Layout: rationale for directories and separation of concerns.
+
+Data Model: diagram of tables and relationships.
+
+Tenant Isolation: explanation of how tenant_id is used to filter data.
+
+RLS Design: description of application‑level enforcement.
+
+ClickHouse Integration (optional): reasons for using ClickHouse for high‑volume analytics.
+
+Implementation Considerations
+
+Secrets Management: Store secrets (e.g., DATABASE_URL, API keys) using Replit’s Secrets Manager. Do not commit them to version control. The .env.example file should contain variable names without values.
+
+Migration Tool: Use a migration tool (e.g., dbmate, knex, or plain psql) to apply SQL migrations on Replit’s Neon DB. Document how to run them locally and via CI.
+
+Indexes: Create appropriate indexes on tenant_id, id, and status to support efficient queries and avoid table scans.
+
+Data Auditing: Consider adding triggers or log tables for auditing changes, especially for high‑impact tables (e.g., jobs, eval_runs).
+
+Performance & Security Notes
+
+Multi‑Tenant Isolation: All queries must filter by tenant_id. Failing to do so could expose data across tenants.
+
+Connection Pooling: For high‑traffic workloads, use Neon’s connection pooler domains and manage connections efficiently
+docs.replit.com
+.
+
+Batch Inserts: For ClickHouse, insert large batches (10k–100k rows) or use asynchronous inserts where appropriate; track deduplication keys to avoid duplication.
+
+Schema Evolution: Use versioned migrations and avoid destructive changes (e.g., DROP TABLE) in production.
+
+Recommended Next Steps
+
+Implement and run migrations on your Replit Neon DB using psql or a migration tool.
+
+Seed the tenants table with demo tenants and verify queries respect tenant isolation.
+
+Document your schema in docs/ARCHITECTURE.md and include an Entity‑Relationship diagram.
+
+If using ClickHouse, set up the cluster and run initial inserts; profile insert performance.
+
+Prompt 2 – Execution Layer on Replit: Orchestration & Workers
+Objectives & Scope
+
+This prompt describes how to implement scheduled dispatchers, long‑running workers, and experimentation runners using Node/Bun scripts deployed within a Replit Repl. It covers segmentation of jobs, idempotent retries, checkpointing, and instrumentation.
+
+Scheduling with Replit Workflows
+
+Replit includes a Workflows tool for running scripts on a schedule. To set up a job dispatcher:
+
+Create a new workflow in the Replit UI (Workflows tool). Name it dispatch_orchestrator. Configure a schedule: every minute or as appropriate.
+
+Define the command to run your script. If your dispatcher is in apps/worker/src/orchestrator-dispatcher.ts, compile it with bun or ts-node:
+
+npx ts-node apps/worker/src/orchestrator-dispatcher.ts
+
+
+Ensure environment variables (e.g., DATABASE_URL, CLICKHOUSE_URL) are available in the workflow context.
+
+Orchestrator Dispatcher Script
+
+The dispatcher dequeues ready jobs, plans shards based on batch_size and parallelism, and enqueues run units. Below is a simplified TypeScript skeleton:
+
+import { Pool } from 'pg';
+import { nanoid } from 'nanoid';
+import clickhouse from '@clickhouse/client';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const ch   = new clickhouse.ClickHouse({ url: process.env.CLICKHOUSE_URL });
+
+async function dispatch() {
+  const client = await pool.connect();
+  try {
+    // Fetch queued jobs
+    const { rows: jobs } = await client.query(
+      `SELECT * FROM jobs WHERE status = 'queued' AND scheduled_at <= NOW()`
+    );
+    for (const job of jobs) {
+      // Mark job as running
+      await client.query('UPDATE jobs SET status = $1, started_at = NOW() WHERE id = $2', ['running', job.id]);
+
+      // Plan shards; this example assumes table with numeric primary key
+      const totalCountRes = await client.query('SELECT COUNT(*) FROM source_table WHERE tenant_id = $1', [job.tenant_id]);
+      const totalRows = parseInt(totalCountRes.rows[0].count, 10);
+      const batchSize = job.batch_size;
+      const shardCount = Math.ceil(totalRows / batchSize);
+
+      for (let shard = 0; shard < shardCount; shard++) {
+        const runId = nanoid();
+        await client.query(
+          `INSERT INTO job_runs (id, job_id, shard, status, attempt, created_at)
+           VALUES ($1, $2, $3, 'queued', 0, NOW())`,
+          [runId, job.id, shard]
+        );
+      }
+    }
+  } finally {
+    client.release();
+  }
+}
+
+dispatch().catch((err) => console.error('Dispatcher error', err));
+
+Worker Script
+
+Workers consume job_runs and process each shard. They should support both synchronous and asynchronous ClickHouse inserts, checkpointing, and idempotent retries.
+
+import { Pool } from 'pg';
+import clickhouse from '@clickhouse/client';
+import { sleep } from './utils';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const ch   = new clickhouse.ClickHouse({ url: process.env.CLICKHOUSE_URL });
+
+async function processShard() {
+  const client = await pool.connect();
+  try {
+    // Fetch a job_run to process
+    const { rows } = await client.query(
+      `UPDATE job_runs
+       SET status = 'running', started_at = NOW()
+       WHERE id = (
+         SELECT id FROM job_runs WHERE status = 'queued' ORDER BY created_at LIMIT 1
+       )
+       RETURNING *`
+    );
+    if (rows.length === 0) {
+      console.log('No shards to process');
+      return;
+    }
+    const run = rows[0];
+    // Fetch job and associated metadata
+    const { rows: jobRows } = await client.query('SELECT * FROM jobs WHERE id = $1', [run.job_id]);
+    const job = jobRows[0];
+    // Determine offset
+    const offset = run.attempt === 0 ? run.shard * job.batch_size : run.checkpoint?.offset || 0;
+    // Extract data from Neon
+    const dataRes = await client.query(
+      `SELECT * FROM source_table WHERE tenant_id = $1 ORDER BY id LIMIT $2 OFFSET $3`,
+      [job.tenant_id, job.batch_size, offset]
+    );
+
+    // Transform & Insert into ClickHouse
+    const rows = dataRes.rows;
+    try {
+      await ch.insert({
+        table: 'target_table',
+        values: rows,
+        format: job.async_insert ? 'JSONEachRow' : 'Native',
+      });
+    } catch (chErr) {
+      // Handle ClickHouse failures by downgrading to sync or reducing concurrency
+      console.error('CH insert error:', chErr);
+      // Optionally update job to reduce parallelism
+      await sleep(5000);
+      throw chErr;
+    }
+
+    // Update job_run as succeeded
+    await client.query(
+      `UPDATE job_runs SET status = 'succeeded', finished_at = NOW(), records_in = $1, records_out = $2
+       WHERE id = $3`,
+      [rows.length, rows.length, run.id]
+    );
+  } catch (err) {
+    // Mark job_run as failed and persist checkpoint
+    await client.query(
+      `UPDATE job_runs SET status = 'failed', finished_at = NOW(), error = $1::jsonb,
+       checkpoint = $2::jsonb WHERE id = $3`,
+      [JSON.stringify({ message: err.message }), JSON.stringify({ offset }), run.id]
+    );
+    console.error('Worker error:', err);
+  } finally {
+    client.release();
+  }
+}
+
+// Continuously process shards
+setInterval(() => {
+  processShard().catch((err) => console.error(err));
+}, 1000);
+
+Experimentation Runner Script
+
+For offline evaluations (batch), fetch dataset slices from your storage (e.g., Neon or an external source), call providers (Gemini, Claude, OpenAI), and store results in run_samples. For online evaluations (A/B, interleaving, bandits), the logic will be embedded in your API or Next.js middleware (see Prompt 8).
+
+Implementation Considerations
+
+Concurrency: Replit Repls run on a single vCPU by default. If your workload is CPU‑bound, consider using fewer worker threads or upgrade the deployment (increase max machines in autoscale
+docs.replit.com
+).
+
+Scheduling Frequency: Balance freshness vs resource usage. A 1‑minute dispatcher may be sufficient; shorter intervals could cause thrashing.
+
+Checkpointing: Persist the last processed offset/key in job_runs.checkpoint to resume after failure. For high‑volume sources, consider storing a timestamp instead of an offset.
+
+Idempotency: Ensure your ClickHouse table deduplicates inserts via primary key (e.g., (tenant_id, id)), and the worker will not insert duplicates on retries.
+
+Backpressure: Monitor ClickHouse merge/parts backlog. If backlog grows, reduce parallelism or switch to synchronous inserts.
+
+Instrumentation: Wrap each major step in OpenTelemetry spans with attributes (tenant_id, job_id, shard, etc.) for debugging and performance monitoring.
+
+Performance & Security Notes
+
+Database Connections: Use pooled connections; release them after each use. Replit’s Neon DB has connection limits
+docs.replit.com
+.
+
+Rate Limiting: If calling external providers (e.g., Gemini, Claude), respect their RPM/TPM quotas (see Prompts 7–8). Implement exponential backoff and jitter on errors.
+
+Secret Handling: Store secrets in Replit’s secrets manager. Access them via process.env in your scripts.
+
+Recommended Next Steps
+
+Create the dispatcher and worker scripts. Add them to the apps/worker/src folder and update package scripts (package.json) to build/run them.
+
+Configure a Replit Workflow to run the dispatcher on a schedule. Test locally with seeded data.
+
+Create a separate workflow or run the worker script continuously via a forever loop (using setInterval as shown).
+
+Instrument the scripts with OpenTelemetry and test the spans using a local collector.
+
+Write unit tests for shard planning, checkpointing, and idempotent inserts.
+
+Prompt 3 – API Surface & SDKs: Route Handlers in Replit
+Objectives & Scope
+
+Define RESTful API endpoints (or Next.js API routes) for orchestrator and experiment functionality, ensure they are tenant‑aware, secure, and integrated with Replit’s auth. Provide TypeScript client SDKs with retry logic.
+
+Server Framework & Setup
+
+Use Next.js 14 (App Router)—fully supported on Replit
+docs.replit.com
+—which provides both SSR and API routing. In your apps/web directory, structure the API routes under app/api/.... Each file exports a POST or GET function.
+
+Example: Creating a Job
+
+File: apps/web/app/api/orchestrator/jobs/route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+import { pool } from '@/lib/db'; // reusable Postgres pool
+import { verifyAuth } from '@/lib/auth';
+
+export async function POST(req: NextRequest) {
+  // Verify auth via Replit
+  const user = await verifyAuth(req);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const body = await req.json();
+  const { kind, payload, batch_size = 50000, parallelism = 8, async_insert = false, dry_run = false } = body;
+  // Validate input (add Zod or Joi validation here)
+
+  const client = await pool.connect();
+  try {
+    const jobId = crypto.randomUUID();
+    await client.query(
+      `INSERT INTO jobs (id, tenant_id, kind, status, priority, payload, batch_size, parallelism, async_insert, dry_run, created_by)
+       VALUES ($1, $2, $3, 'queued', 100, $4, $5, $6, $7, $8, $9)`,
+      [jobId, user.tenant_id, kind, payload, batch_size, parallelism, async_insert, dry_run, user.id]
+    );
+    return NextResponse.json({ job_id: jobId }, { status: 201 });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: 'Failed to create job' }, { status: 500 });
+  } finally {
+    client.release();
+  }
+}
+
+
+The above route verifies the user via a custom verifyAuth function that checks the Replit auth cookie or header and extracts tenant_id. It then inserts a new job. Use similar patterns for cancel/retry endpoints.
+
+Example: Fetching Job Status
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  const user = await verifyAuth(req);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const jobId = params.id;
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query(
+      'SELECT * FROM jobs WHERE id = $1 AND tenant_id = $2',
+      [jobId, user.tenant_id]
+    );
+    if (rows.length === 0) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+    }
+    return NextResponse.json(rows[0]);
+  } finally {
+    client.release();
+  }
+}
+
+Client SDKs
+
+Provide typed SDKs in packages/lib. Use fetch or axios and encapsulate authentication, retries, and error handling. Example:
+
+// packages/lib/orchestrator-client.ts
+import { z } from 'zod';
+
+const JobSchema = z.object({ id: z.string(), kind: z.string(), status: z.string() });
+
+export class OrchestratorClient {
+  constructor(private baseUrl: string, private getToken: () => Promise<string>) {}
+
+  async createJob(args: { kind: string; payload: any; batchSize?: number; parallelism?: number; asyncInsert?: boolean; dryRun?: boolean; }) {
+    const token = await this.getToken();
+    const res = await fetch(`${this.baseUrl}/api/orchestrator/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(args),
+    });
+    if (!res.ok) throw new Error(`Failed to create job: ${await res.text()}`);
+    return await res.json();
+  }
+
+  async getJob(id: string) {
+    const token = await this.getToken();
+    const res = await fetch(`${this.baseUrl}/api/orchestrator/jobs/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(`Failed to fetch job: ${await res.text()}`);
+    const data = await res.json();
+    return JobSchema.parse(data);
+  }
+}
+
+
+Repeat similar patterns for sandbox APIs. The SDK hides implementation details and enforces type safety.
+
+Implementation Considerations
+
+Authentication: Use Replit’s auth API or JWT tokens to identify users and extract tenant_id
+replit.com
+.
+
+Validation: Validate request payloads using Zod or Joi. Reject invalid inputs to protect your database.
+
+Error Handling: Catch and log database errors; return meaningful error messages. Never expose stack traces or internal details in responses.
+
+Rate Limiting: Implement basic rate limiting (e.g., per IP or per user) to prevent abuse.
+
+Separation of Concerns: Keep business logic in separate services (e.g., orchestrator service) rather than directly in route handlers.
+
+Performance & Security Notes
+
+Sensitive Data: Never return secrets (e.g., tokens) in API responses. Use environment variables to store secrets safely.
+
+Connection Management: Use a shared Postgres pool. Do not create a new connection per request.
+
+Caching: For read‑heavy endpoints, consider caching results (e.g., using Redis). Ensure cache keys include tenant_id.
+
+CORS: Configure CORS appropriately if exposing APIs externally.
+
+Recommended Next Steps
+
+Implement the remaining endpoints (cancel, retry, list) following the patterns above.
+
+Build the Sandbox API for creating experiments and runs. Include support for provider configuration and safety settings.
+
+Write integration tests for each endpoint using a test database.
+
+Publish the SDK packages to your internal npm registry (or locally within the monorepo).
+
+Prompt 4 – UI/UX on Replit: Dashboards & Composers
+Objectives & Scope
+
+This prompt details how to create a polished frontend using Next.js on Replit. It covers dashboards for orchestrator and sandbox, job/experiment composers, run detail pages, and shared components. It emphasises accessibility, performance, and responsive design.
+
+Overall UI Architecture
+
+Pages Directory (App Router): Use the app folder under apps/web (Next.js 14). Each route under app/(with-layout) uses a layout file for shared navigation. Nested routes manage different sections (orchestrator, sandbox, filebridge).
+
+State Management: Use TanStack Query (React Query) for data fetching, caching, and mutation. It integrates well with Next.js and SSR.
+
+Styling: Use Tailwind CSS (already available in the template). For UI components, use shadcn/ui; they provide accessible and aesthetically pleasing primitives.
+
+Orchestrator UI
+
+Jobs List (/orchestrator/jobs):
+
+Fetch jobs via SDK; filter by tenant_id, kind, and status.
+
+Display a table with columns: ID, kind, status (colored chips), scheduled_at, started_at, finished_at, and action buttons (view/cancel/retry).
+
+Use Tailwind classes and @/components/ui/table.
+
+Job Composer (/orchestrator/jobs/new):
+
+Form with fields: kind (select), batchSize, parallelism, asyncInsert (toggle), dryRun (toggle), payload (JSON editor).
+
+Validate inputs client‑side; display error messages inline.
+
+On submit, call orchestratorClient.createJob(); optimistically update the list; show a success toast.
+
+Job Detail (/orchestrator/jobs/[id]):
+
+Fetch job and its runs. Display status, timestamps, shard grid (each shard with status, attempts, records, etc.).
+
+Display logs (real‑time if using SSE) and metrics (e.g., throughput chart) using a chart library (e.g., recharts). Each chart must be its own plot (no subplots).
+
+Provide actions: retry or cancel job (buttons call API endpoints).
+
+Sandbox UI
+
+Dashboard (/sandbox/runs):
+
+List experiments and runs with metrics: pass rate, p95 latency, token/cost, provider. Use pagination and filters.
+
+Show status chips (queued, running, succeeded, etc.).
+
+Suite Composer (/sandbox/experiments/new):
+
+Select dataset (drop‑down), providers (multi‑select with Gemini, Claude, OpenAI), prompt versions, assertions (text fields or JSON config), guardrails (checkboxes for OWASP tests), and traffic policy (sliders for A/B percentages or bandit exploration caps).
+
+Support uploading a dataset via FileBridge or selecting from Replit’s storage.
+
+Validate forms; call API to create suite and schedule runs.
+
+Run Detail (/sandbox/runs/[id]):
+
+Display metrics and logs. If the run is online with interleaving, show a table with side‑by‑side outputs and a UI to attribute user clicks.
+
+If using bandits, display posterior distributions and cumulative regret plots.
+
+Provide buttons to cancel a run or roll back via feature flags.
+
+Shared Components
+
+HealthBadge: Colored indicator with tooltip for job or run health.
+
+MetricCard: Card showing a metric (e.g., throughput, pass rate) with a sparkline.
+
+ShardTable: Table for job shards; includes progress and error icons.
+
+InterleaveViewer: Component to display interleaved results and capture attribution.
+
+BanditPosteriorPlot: Chart showing Beta distribution posteriors for arms.
+
+Implementation Considerations
+
+Accessibility: All interactive elements must be keyboard navigable. Use aria-label and appropriate semantic HTML.
+
+Error Boundaries: Wrap pages with error boundaries to catch and display errors without crashing the app.
+
+Skeleton Loading: Use Suspense with custom fallback skeletons for initial data fetches.
+
+Responsive Design: Layouts should adapt from mobile to desktop. Use CSS grid and flexbox; test at multiple breakpoints.
+
+Real‑Time Updates: Use WebSockets or SSE for long‑running jobs/runs to update the UI in real time. Fallback to polling if necessary.
+
+Performance & Security Notes
+
+SSR vs Client‑Side: Use SSR for initial page loads; rely on client‑side fetches for subsequent updates. Avoid heavy computation in React components.
+
+Sensitive Data: Never expose API keys or secrets in the browser. Only send public configuration (e.g., provider names). Use serverless functions or API routes for privileged operations.
+
+Rate Limiting: Debounce or throttle user actions (e.g., repeated submits) to prevent API abuse.
+
+Recommended Next Steps
+
+Scaffold the Next.js app with the template provided by Replit
+docs.replit.com
+.
+
+Build the orchestrator pages using Tailwind and shadcn components. Start with the Jobs list and composer.
+
+Build the sandbox pages iteratively, integrating provider selection and guardrails.
+
+Write unit and E2E tests (e.g., with Playwright) for critical workflows.
+
+Deploy and test on Replit’s autoscale; monitor performance and adjust max machines as needed.
+
+Prompt 5 – Operationalization: OTel, CI/CD, Tests & Runbooks
+Objectives & Scope
+
+Ensure the system is observable, testable, and continuously delivered. Provide OpenTelemetry instrumentation, CI pipelines (GitHub Actions), test suites, seeding scripts, runbooks, and acceptance criteria.
+
+Observability
+
+OpenTelemetry Collector: Create otel/collector.yaml to receive traces/metrics from your services and export to your observability backend (e.g., Jaeger, Prometheus). Run the collector in Replit via a sidecar or external host.
+
+Instrumentation: In each script, initialize OTel:
+
+import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
+import { ConsoleSpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
+
+const provider = new NodeTracerProvider({ resource: new Resource({
+  'service.name': 'orch-worker',
+  'tenant.id': currentTenantId,
+}) });
+provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
+provider.register();
+
+const tracer = provider.getTracer('orchestrator');
+// later: tracer.startSpan(...)
+
+
+Attach attributes (job_id, shard, provider, model, etc.) to spans.
+
+Dashboards: Use Grafana or Replit’s analytics to display metrics: throughput (rows/s), inserts/sec, errors, p95 latency, pass rates, cost per run. If using ClickHouse, collect the event logs into a table and visualize query performance.
+
+CI/CD
+
+Use GitHub Actions. Define separate workflows:
+
+Static Analysis & Unit Tests (.github/workflows/ci.yml):
+
+name: CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+      - run: npm install --frozen-lockfile
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run typecheck
+
+
+Smoke Tests (.github/workflows/smoke.yml):
+
+Seed a test database.
+
+Run dispatcher/worker scripts on a small dataset; assert row counts in ClickHouse.
+
+Run offline and online evaluation smoke tests using provider stubs.
+
+Deployment (.github/workflows/deploy.yml):
+
+On main branch push, run build and publish to a Replit deployment. For Next.js, the build command is npm run build and run command is npm run start
+docs.replit.com
+. For worker scripts, compile TypeScript and upload to Replit.
+
+Tests
+
+Unit Tests: Use Jest or Vitest to test shard planning, API handlers, and provider adapters. Mock database connections and external API calls.
+
+Integration Tests: Use a temporary Neon database. Spin up the API with supertest; hit endpoints and assert database state.
+
+E2E Tests: Use Playwright to simulate user flows (create job, view job, create experiment, view results) in the UI.
+
+Seeds & Smoke Scripts
+
+Seed Script: Create scripts/seed.ts to insert demo tenants, projects, prompt versions, etc. Use faker for generating fake data.
+
+Smoke Scripts: Provide scripts/smoke-orchestrator.ts and scripts/smoke-sandbox.ts to run end‑to‑end tests from the command line.
+
+Runbooks
+
+Create runbooks in docs/:
+
+RUNBOOK_orchestrator.md – Steps to scale jobs up/down, adjust parallelism, handle ClickHouse backpressure, and recover from failures.
+
+RUNBOOK_experimentation.md – How to choose between A/B, interleaving, and bandits; how to interpret metrics; how to rollback.
+
+SECURITY_CHECKLIST.md – Check secrets management, tenant isolation, provider usage compliance.
+
+Implementation Considerations
+
+Secret Scanning: Add a GitHub action to scan for secrets (e.g., gitleaks). Prevent commits with plaintext API keys.
+
+Test Isolation: Use unique tenant IDs per test to avoid cross‑contamination. Clear test databases between runs.
+
+CI Environment: For provider smokes (e.g., Gemini, Claude), check environment variables for API keys; skip tests if keys are absent.
+
+Performance & Security Notes
+
+Observability Overhead: Instrumentation adds latency; sample only a percentage of spans in production.
+
+CI Time: Limit smoke datasets to avoid long CI runs. Use concurrency where possible.
+
+Secrets: Ensure .env.example lists variable names but no values. Use Replit’s secrets manager for actual values.
+
+Recommended Next Steps
+
+Set up GitHub Actions with the workflows above.
+
+Write seeds and smoke scripts; run them locally and in CI.
+
+Define dashboards in your observability tool and ensure instrumentation is sending data.
+
+Write runbooks and integrate them into onboarding documentation.
+
+Prompt 6 – Local FileBridge Extension: Desktop/CLI Agent & Cloud Sync
+Objectives & Scope
+
+Design and implement a secure local agent (CLI) that syncs selected directories on a user’s machine with your Replit application. Provide REST APIs on the server and a dashboard for managing devices, directory grants, and synchronization operations.
+
+Local Agent Architecture
+
+Language & Packaging: Implement the agent in Node.js (TypeScript). Provide a CLI binary via pkg or nexe to produce cross‑platform executables. Optionally wrap it in an Electron shell for a tray menu.
+
+Core Modules:
+
+HTTP Server (/src/server/http.ts): Listens on localhost:<port> with HTTPS; exposes endpoints:
+
+GET /v1/scan – returns a directory manifest (file paths, sizes, hashes)
+
+POST /v1/diff – given a previous manifest, returns added/modified/deleted files
+
+POST /v1/upload – uploads selected files to pre‑signed URLs
+
+GET /v1/download – downloads files from the server
+
+POST /v1/subscribe – upgrades to WebSocket for real‑time events
+
+WebSocket Server (/src/server/ws.ts): Emits file system events (create/update/delete) using chokidar.
+
+Auth (/src/auth/device-bind.ts): Handles device registration via OAuth device flow or Replit Auth. Stores a persistent device_id and short‑lived tokens. Supports key rotation.
+
+TLS (/src/security/tls.ts): Generates self‑signed certs; pins the server certificate; optionally supports mutual TLS.
+
+FS & Diff (/src/fs/*.ts): Performs directory scanning, hashing (xxhash/BLAKE3), and diffing. Supports glob allow‑lists and block‑lists.
+
+Streaming & Upload (/src/fs/stream.ts): Streams file chunks with resume support; verifies SHA‑256 after upload.
+
+State (/src/state/store.ts): Persists grants, manifests, and checkpoints using SQLite or LevelDB.
+
+CLI Commands:
+
+filebridge register --name <device-name> – performs device registration and stores credentials.
+
+filebridge allow --path <dir> --read --write --include "**/*.md" --exclude "**/node_modules/**" – grants the agent access to a directory with optional glob filters.
+
+filebridge serve --port 5123 --tls – starts the local API.
+
+filebridge sync --diff --upload --root <dir> --select <pattern> – triggers scanning/diffing and uploading.
+
+filebridge status – shows current sync status.
+
+filebridge unlink – removes the device registration.
+
+filebridge rotate-keys – rotates the device’s key pair.
+
+Cloud APIs & Database
+
+Implement server routes under /api/filebridge:
+
+POST /devices/register – creates a device record in Neon DB, returns a short‑lived device token.
+
+POST /devices/:id/rotate – rotates device keys.
+
+POST /sync/request – requests an action (scan/diff/upload/download). Generates a one‑time signed order.
+
+GET /manifests/:id – fetches stored manifests.
+
+GET /events?device_id=… – streams events for a device (via SSE or websockets).
+
+Corresponding tables:
+
+CREATE TABLE devices (
+  id         UUID PRIMARY KEY,
+  tenant_id  UUID,
+  name       TEXT,
+  os         TEXT,
+  arch       TEXT,
+  public_key TEXT,
+  last_seen  TIMESTAMPTZ,
+  created_by UUID,
+  created_at TIMESTAMPTZ
+);
+
+CREATE TABLE dir_grants (
+  id          UUID PRIMARY KEY,
+  device_id   UUID REFERENCES devices(id),
+  root_path   TEXT,
+  globs       TEXT[],
+  read        BOOLEAN,
+  write       BOOLEAN,
+  created_at  TIMESTAMPTZ
+);
+
+CREATE TABLE manifests (
+  id          UUID PRIMARY KEY,
+  device_id   UUID REFERENCES devices(id),
+  root_path   TEXT,
+  snapshot    JSONB,
+  hash        TEXT,
+  created_at  TIMESTAMPTZ
+);
+
+CREATE TABLE sync_orders (
+  id           UUID PRIMARY KEY,
+  device_id    UUID REFERENCES devices(id),
+  kind         TEXT,
+  payload      JSONB,
+  signed_until TIMESTAMPTZ,
+  status       TEXT CHECK (status IN ('issued','ack','running','succeeded','failed','expired')),
+  created_at   TIMESTAMPTZ
+);
+
+CREATE TABLE sync_events (
+  id         UUID PRIMARY KEY,
+  device_id  UUID REFERENCES devices(id),
+  ts         TIMESTAMPTZ,
+  level      TEXT,
+  message    TEXT,
+  meta       JSONB
+);
+
+Sync Dashboard on Replit
+
+Devices Page: Lists registered devices, last seen time, OS/arch, and actions (rotate keys, unlink). Use color badges to indicate online/offline.
+
+Grants Page: Displays directory grants for a selected device. Allow editing globs and permissions.
+
+Sync Page: Allows requesting a scan/diff; displays differences; allows selecting files to upload/download. Provide progress bars and resumable statuses.
+
+Events Page: Streams logs from sync_events table; filter by level or date.
+
+Metrics: Charts showing bytes/sec, files/min, p95 latency, error rate per device.
+
+Implementation Considerations
+
+Security: The agent must only serve on localhost; require HTTPS and optionally mutual TLS. Use short‑lived signed orders; verify order signatures server side. Deny access to system directories by default.
+
+Reliability: Use resumable uploads with checkpointing. Persist partial state in local storage. Implement backoff on network errors.
+
+Privacy: Default to metadata‑only sync; require explicit opt‑in to upload file contents. Never sync .env or credential files unless explicitly included.
+
+Scalability: For large directories, chunk diff responses and stream uploads to avoid memory spikes.
+
+Performance & Security Notes
+
+Throughput: Use adjustable chunk sizes (e.g., 8 MB) for uploads. Tune concurrency to avoid saturating network.
+
+Integrity: Compute SHA‑256 on the agent; verify server‑side after upload.
+
+Token Lifetimes: Orders expire within 10 minutes; device tokens rotate every 24 hours. Deny replayed orders.
+
+Access Control: Only authenticated users can register devices or request sync actions. Enforce tenant scoping on all API queries.
+
+Recommended Next Steps
+
+Implement the CLI agent with modular components. Write unit tests for hashing, diffing, and streaming.
+
+Implement the server APIs and corresponding database tables.
+
+Build the Sync Dashboard pages and integrate with the APIs. Use websockets for real‑time event streams.
+
+Perform end‑to‑end tests: register a device, grant access to a test directory, sync changes, and verify file contents in Replit.
+
+Document installation and rotation procedures in RUNBOOK_filebridge.md and security considerations in SECURITY_FILEBRIDGE.md.
+
+Prompt 7 – Google AI Studio (Gemini) Provider Integration
+Objectives & Scope
+
+Integrate Google’s Gemini family of models via the AI Studio API to support offline and online evaluations. This involves writing a provider adapter, handling server‑side keys, streaming and batch requests, safety settings, and rate limiting. Extend UI and APIs to allow selecting Gemini models and safety options.
+
+Provider Adapter
+
+Configuration: Add the following to .env.example:
+
+GEMINI_API_KEY=
+GEMINI_DEFAULT_MODEL=gemini-2.5-flash
+GEMINI_SAFETY_PRESET=standard
+
+
+Adapter Implementation (packages/providers/gemini.ts):
+
+import fetch from 'node-fetch';
+import { ProviderResult } from './types';
+
+interface GeminiRequest {
+  model: string;
+  messages?: { role: 'user' | 'system'; content: string }[];
+  prompt?: string;
+  tools?: any[];
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  safety?: any;
+}
+
+export async function generate(req: GeminiRequest): Promise<ProviderResult> {
+  const apiKey = process.env.GEMINI_API_KEY!;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${req.model}:generateContent?key=${apiKey}`;
+  const body: any = {
+    contents: req.messages?.map(m => ({ role: m.role, parts: [{ text: m.content }] })) || undefined,
+    safetySettings: req.safety || undefined,
+    generationConfig: {
+      temperature: req.temperature,
+      topP: req.topP,
+      topK: req.topK,
+    },
+  };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Gemini error ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  // Convert Gemini response to ProviderResult
+  return {
+    content: data.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || '',
+    role: 'assistant',
+    usage: { tokens_in: data.usageMetadata?.promptTokenCount || 0, tokens_out: data.usageMetadata?.candidatesTokenCount || 0 },
+    model: req.model,
+    finish_reason: data.candidates?.[0]?.finishReason,
+    raw: data,
+  };
+}
+
+
+Streaming & Batch: Gemini’s API supports streaming responses via SSE and batch requests. Implement streamGenerate using an EventSource and wrap tokens into an async iterator. Implement batchGenerate by chunking input items to respect total token budgets.
+
+Safety Settings: Accept a safety object (per category thresholds) and map to Gemini’s safetySettings. Document that some categories cannot be fully disabled according to API documentation.
+
+Backoff & Rate Limiting: Implement exponential backoff with jitter on 429/5xx responses. Keep track of RPM/TPM budgets. Fallback to Flash or Flash‑Lite if heavy models exceed budgets.
+
+API & UI Changes
+
+API Endpoints: Extend experiment creation endpoints to accept provider: "gemini" and model fields. Pass safety configuration to the adapter.
+
+UI: In the suite composer, add Gemini models (Pro, Flash, Flash‑Lite) to the provider dropdown. Provide a safety settings form (sliders or toggles per category). Allow users to toggle streaming vs batch mode.
+
+Metrics: Track Gemini usage (tokens in/out, cost estimates) and display them in the sandbox dashboard.
+
+Tests & CI
+
+Unit Tests: Validate that requests to Gemini are formed correctly; mock API responses; test safety mapping.
+
+Integration Tests: Use a small dataset to run a batch evaluation; assert pass rates and token counts.
+
+CI: Add a workflow (gemini-provider-ci.yml) that runs provider smoke tests if GEMINI_API_KEY is defined. Ensure secrets scanning is enabled.
+
+Implementation Considerations
+
+Server‑Side Only: Never expose the Gemini API key in client bundles; perform all calls server‑side via API routes or worker scripts.
+
+Fallback Logic: When budgets are exceeded or errors persist, automatically downgrade to gemini-2.5-flash or gemini-2.5-flash-lite.
+
+Security: Respect Google’s content safety policies; handle blocked content gracefully and log reasons.
+
+Performance & Security Notes
+
+Concurrency: Limit the number of concurrent streaming requests to avoid hitting RPM limits. Use a central token budget manager (see Prompt 8 for token-budget.ts).
+
+Cost: Track token usage and cost per model; alert when spending approaches monthly limits.
+
+Error Handling: Capture specific error codes (INVALID_ARGUMENT, RESOURCE_EXHAUSTED) and retry accordingly.
+
+Recommended Next Steps
+
+Implement the Gemini adapter; test locally with the Flash model.
+
+Update API and UI to include Gemini providers and safety settings.
+
+Write tests and update CI to run them conditionally.
+
+Monitor token usage and cost after initial deployment; adjust default model or budgets as needed.
+
+Prompt 8 – Anthropic Claude & OpenAI ChatGPT Provider Integration
+Objectives & Scope
+
+Integrate Anthropic Claude and OpenAI ChatGPT as additional providers with unified request/response semantics. Support tool calling, streaming, batch evaluation, and budgeting. Extend APIs, UI, tests, and CI workflows.
+
+Provider Adapters
+
+Configuration: Add variables to .env.example:
+
+ANTHROPIC_API_KEY=
+ANTHROPIC_DEFAULT_MODEL=claude-3.7-sonnet
+OPENAI_API_KEY=
+OPENAI_DEFAULT_MODEL=gpt-4o
+PROVIDER_DEFAULT_TPM_BUDGET=800000
+PROVIDER_DEFAULT_RPM_BUDGET=1800
+
+
+Registry Update (packages/providers/index.ts): Register providers with capability flags:
+
+export const Providers = {
+  gemini: { text: true, vision: false, streaming: true, batch: true, tools: false },
+  anthropic: { text: true, streaming: true, batch: true, tools: true },
+  openai: { text: true, vision: false, streaming: true, batch: true, tools: true },
+};
+
+
+Anthropic Adapter (packages/providers/anthropic.ts):
+
+import fetch from 'node-fetch';
+import { ProviderResult } from './types';
+
+interface AnthropicRequest {
+  model: string;
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+  tools?: Array<{ name: string; description: string; input_schema: any }>;
+  toolChoice?: 'auto' | 'required' | { name: string };
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
+}
+
+export async function generate(req: AnthropicRequest): Promise<ProviderResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY!;
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: req.model,
+      messages: req.messages,
+      tools: req.tools,
+      tool_choice: req.toolChoice,
+      max_tokens: req.maxTokens,
+      temperature: req.temperature,
+      top_p: req.topP,
+    }),
+  });
+  if (!response.ok) throw new Error(`Anthropic error ${response.status}: ${await response.text()}`);
+  const data = await response.json();
+  // Normalize to ProviderResult
+  const toolCalls = data.content.filter((m: any) => m.type === 'tool_use').map((m: any) => ({ id: m.id, name: m.name, arguments: m.input }));
+  return {
+    content: data.content.filter((m: any) => m.type === 'text').map((m: any) => m.text).join(''),
+    role: 'assistant',
+    tool_calls: toolCalls.length ? toolCalls : undefined,
+    usage: { tokens_in: data.usage.input_tokens, tokens_out: data.usage.output_tokens },
+    model: req.model,
+    finish_reason: data.stop_reason,
+    raw: data,
+  };
+}
+
+
+OpenAI Adapter (packages/providers/openai.ts):
+
+import fetch from 'node-fetch';
+import { ProviderResult } from './types';
+
+interface OpenAIRequest {
+  model: string;
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+  tools?: Array<{ type: 'function'; function: { name: string; description?: string; parameters: any } }>;
+  toolChoice?: 'auto' | 'required' | { name: string };
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
+}
+
+export async function generate(req: OpenAIRequest): Promise<ProviderResult> {
+  const apiKey = process.env.OPENAI_API_KEY!;
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: req.model,
+      messages: req.messages,
+      tools: req.tools,
+      tool_choice: req.toolChoice,
+      max_tokens: req.maxTokens,
+      temperature: req.temperature,
+      top_p: req.topP,
+    }),
+  });
+  if (!response.ok) throw new Error(`OpenAI error ${response.status}: ${await response.text()}`);
+  const data = await response.json();
+  const choice = data.choices[0];
+  const message = choice.message;
+  const toolCalls = message.tool_calls?.map((t: any) => ({ id: t.id, name: t.function.name, arguments: t.function.arguments && JSON.parse(t.function.arguments) }));
+  return {
+    content: message.content || '',
+    role: 'assistant',
+    tool_calls: toolCalls?.length ? toolCalls : undefined,
+    usage: { tokens_in: data.usage.prompt_tokens, tokens_out: data.usage.completion_tokens },
+    model: req.model,
+    finish_reason: choice.finish_reason,
+    raw: data,
+  };
+}
+
+
+Token Budget Manager (packages/providers/utils/token-budget.ts):
+
+class BudgetManager {
+  private rpmRemaining: number;
+  private tpmRemaining: number;
+  constructor(private rpmLimit: number, private tpmLimit: number) {
+    this.rpmRemaining = rpmLimit;
+    this.tpmRemaining = tpmLimit;
+    // Reset counters every minute
+    setInterval(() => { this.rpmRemaining = rpmLimit; }, 60_000);
+    // Reset TPM every minute (approximation)
+    setInterval(() => { this.tpmRemaining = tpmLimit; }, 60_000);
+  }
+  async acquire(tokens: number) {
+    while (this.rpmRemaining <= 0 || this.tpmRemaining < tokens) {
+      await new Promise((res) => setTimeout(res, 100));
+    }
+    this.rpmRemaining -= 1;
+    this.tpmRemaining -= tokens;
+  }
+}
+export const defaultBudgetManager = new BudgetManager(
+  parseInt(process.env.PROVIDER_DEFAULT_RPM_BUDGET || '1800', 10),
+  parseInt(process.env.PROVIDER_DEFAULT_TPM_BUDGET || '800000', 10),
+);
+
+API & UI Changes
+
+Extend sandbox and orchestrator endpoints to accept provider: "anthropic" | "openai" along with provider‑specific parameters (e.g., tools, toolChoice, maxTokens).
+
+Update the suite composer UI: add Anthropic and OpenAI to the provider drop‑down; show tool schema editors (JSON Schema) when tools are enabled; show budget sliders.
+
+Display per‑provider metrics (token usage, cost) in the dashboard.
+
+Tests & CI
+
+Unit Tests: Validate request builders for both providers; ensure tool calls are normalized correctly; test token budgeting logic.
+
+Integration Tests: Run small offline evals using test models (e.g., claude-3.7-haiku, gpt-4o-mini); assert results and budgets are respected.
+
+CI: Create providers-claude-openai-ci.yml that runs unit tests and smokes; use secret scanning to prevent accidental key leaks.
+
+Implementation Considerations
+
+Key Management: Store API keys in Replit’s secrets manager; they must not appear in client code. Use server‑side adapters for all provider calls.
+
+Tool/Function Calling: Normalize tool call schema across providers. Use Zod to validate tool schemas before sending them. Document that tools can be set to auto, required, or specified by name.
+
+Fallbacks: Provide fallback models (e.g., Sonnet → Haiku; GPT‑4o → GPT‑4o‑mini) if budgets are exhausted.
+
+Logging: Log provider errors and blocked content; include provider name and model for diagnostics.
+
+Performance & Security Notes
+
+Rate Limiting: Use the budget manager to control RPM/TPM. Spread requests over time (e.g., using AIMD) to avoid 429 responses.
+
+Cost Tracking: Monitor token usage and cost per provider; define per‑tenant limits. Alert when near quota.
+
+Content Safety: Respect each provider’s safety policies; handle blocked content with explicit error messages.
+
+Recommended Next Steps
+
+Implement both adapters and the budget manager. Test them with small prompts locally (mock external calls where possible).
+
+Update API routes and UI to support provider selection, tool schemas, and budgets.
+
+Write integration tests and run them in CI with sample API keys (or stubbed providers).
+
+Monitor token usage and adjust budgets as necessary.
+
+Conclusion
+
+By expanding each prompt with detailed guidance, code skeletons, architectural rationale, and best practices, this document provides a clear blueprint for building a sophisticated, multi‑tenant orchestration and AI experimentation platform on Replit.com. Leveraging Replit’s native Neon Postgres and authentication
+replit.com
+, autoscaling Next.js support
+docs.replit.com
+, and integrated workflows, you can implement complex job scheduling, evaluation pipelines, and secure local file synchronization. Integrations with Google Gemini, Anthropic Claude, and OpenAI enable cutting‑edge AI experiments, while comprehensive observability, CI/CD, testing, and runbooks ensure reliability and maintainability.
