@@ -13,8 +13,8 @@ import {
 import { 
   LayoutDashboard, 
   Briefcase, 
-  FlaskConical, 
-  FileText, 
+  Upload,
+  BookOpen,
   Settings,
   Database,
   Activity
@@ -28,28 +28,23 @@ const mainItems = [
     icon: LayoutDashboard,
   },
   {
+    title: "Files",
+    url: "/files",
+    icon: Upload,
+  },
+  {
+    title: "Knowledge Base",
+    url: "/kb",
+    icon: BookOpen,
+  },
+  {
     title: "Jobs",
     url: "/jobs",
     icon: Briefcase,
   },
-  {
-    title: "Experiments",
-    url: "/experiments",
-    icon: FlaskConical,
-  },
-  {
-    title: "Prompts",
-    url: "/prompts",
-    icon: FileText,
-  },
 ];
 
 const systemItems = [
-  {
-    title: "Providers",
-    url: "/providers",
-    icon: Database,
-  },
   {
     title: "Monitoring",
     url: "/monitoring",
@@ -70,11 +65,11 @@ export function AppSidebar() {
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-md bg-primary flex items-center justify-center">
-            <Database className="h-5 w-5 text-primary-foreground" />
+            <BookOpen className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h2 className="text-lg font-medium">Orchestrator</h2>
-            <p className="text-xs text-muted-foreground">Platform v1.0</p>
+            <h2 className="text-lg font-medium">File Organizer</h2>
+            <p className="text-xs text-muted-foreground">AI-Powered KB</p>
           </div>
         </div>
       </SidebarHeader>

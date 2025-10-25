@@ -9,19 +9,17 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import Jobs from "@/pages/Jobs";
-import Experiments from "@/pages/Experiments";
-import Prompts from "@/pages/Prompts";
-import Providers from "@/pages/Providers";
+import Files from "@/pages/Files";
+import KnowledgeBase from "@/pages/KnowledgeBase";
 import Monitoring from "@/pages/Monitoring";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/files" component={Files} />
+      <Route path="/kb" component={KnowledgeBase} />
       <Route path="/jobs" component={Jobs} />
-      <Route path="/experiments" component={Experiments} />
-      <Route path="/prompts" component={Prompts} />
-      <Route path="/providers" component={Providers} />
       <Route path="/monitoring" component={Monitoring} />
       <Route component={NotFound} />
     </Switch>

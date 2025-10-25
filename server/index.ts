@@ -49,6 +49,13 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
+  // Start background workers
+  const { startDispatcher } = await import("./workers/dispatcher");
+  const { startWorker } = await import("./workers/processor");
+  
+  startDispatcher(10000); // Every 10 seconds
+  startWorker(5000); // Every 5 seconds
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
