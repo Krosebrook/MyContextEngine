@@ -14,7 +14,7 @@ export async function syncJobToSupabase(job: Job) {
         status: job.status,
         priority: job.priority,
         metadata: job.metadata || {},
-        result: job.result || {},
+        result: (job as any).result || {},
         error: job.error,
         attempts: job.attempts,
         max_attempts: job.maxAttempts,

@@ -75,16 +75,16 @@ export default function JobsRealtime() {
     id: sJob.id,
     tenantId: sJob.tenant_id,
     kind: sJob.kind,
-    status: sJob.status,
+    status: sJob.status as "queued" | "running" | "succeeded" | "failed" | "canceled",
     priority: sJob.priority,
     metadata: sJob.metadata,
     result: sJob.result,
     error: sJob.error,
     attempts: sJob.attempts,
     maxAttempts: sJob.max_attempts,
-    scheduledAt: sJob.scheduled_at ? new Date(sJob.scheduled_at) : undefined,
-    startedAt: sJob.started_at ? new Date(sJob.started_at) : null,
-    finishedAt: sJob.finished_at ? new Date(sJob.finished_at) : null,
+    scheduledAt: sJob.scheduled_at || new Date().toISOString(),
+    startedAt: sJob.started_at || undefined,
+    finishedAt: sJob.finished_at || undefined,
   });
 
   const retryMutation = useMutation({
