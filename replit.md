@@ -1,10 +1,24 @@
 # AI-Powered File Organization & Knowledge Management Platform
 
+## Recent Updates
+
+### Latest Session Features (Completed & Architect-Reviewed)
+1. **File Download System** - Download buttons on KB entries with Supabase Storage signed URLs (60s expiry)
+2. **Bulk File Upload** - Drag-drop multiple files with real-time queue tracking UI showing success/error status per file
+3. **OpenAI Integration** - Added GPT-4o-mini provider alongside Gemini and Claude for AI analysis
+4. **Advanced KB Search** - Full-text search across title/summary/tags, multi-category filtering, sorting (date/title/category)
+5. **Local Drive Scanner** - New `/scanner` page to scan C:/D: drives with:
+   - Secure path whitelist (C:\, D:\, /home, /tmp, homedir, uploads/)
+   - Path boundary validation using path.resolve() + path.relative()
+   - Depth limit (3), file count (500), size filter (<100MB)
+   - Batch import (50 files max) with rejection tracking
+   - Platform-aware root paths (Windows/POSIX)
+
 ## Overview
 
-This is an AI-powered knowledge management system where users can drag-and-drop any files (PDFs, images, documents, code, zips) and have them automatically organized into structured, searchable knowledge bases. The system uses multi-provider AI (Gemini, Claude, ChatGPT) to analyze, categorize, tag, and summarize content, creating an intelligent file organization platform.
+This is an AI-powered knowledge management system where users can drag-and-drop any files (PDFs, images, documents, code, zips) and have them automatically organized into structured, searchable knowledge bases. The system uses multi-provider AI (Gemini, Claude, OpenAI GPT-4o-mini) to analyze, categorize, tag, and summarize content, creating an intelligent file organization platform.
 
-The application features a complete job processing pipeline with background workers that extract text from files and leverage AI to generate structured metadata (title, summary, category, tags) for each file. All data is stored in a multi-tenant PostgreSQL database with real-time UI updates.
+The application features a complete job processing pipeline with background workers that extract text from files and leverage AI to generate structured metadata (title, summary, category, tags) for each file. All data is stored in a multi-tenant PostgreSQL database with real-time UI updates and local drive scanning capabilities.
 
 ## User Preferences
 
@@ -28,9 +42,10 @@ Preferred communication style: Simple, everyday language.
 
 **Key Pages**:
 - Dashboard: Overview with metrics (total files, KB entries, jobs, success rate) and recent jobs table
-- Files: Drag-and-drop file upload interface with real-time upload progress and file status tracking
-- Knowledge Base: Grid view of AI-analyzed content with search, category filters, and AI-generated metadata display
+- Files: Drag-and-drop file upload interface with real-time upload progress, file status tracking, and bulk upload queue
+- Knowledge Base: Grid view of AI-analyzed content with full-text search, category filters, sorting options, download buttons, and AI-generated metadata
 - Jobs: Job listing with status filters, search, and actions (retry, cancel) with 5-second auto-refresh
+- Scanner: Local drive scanner (C:/D:) with path whitelist security, batch import, and rejection tracking
 - Monitoring: System events and job progress tracking (placeholder for future implementation)
 
 **Component Architecture**:
@@ -53,16 +68,17 @@ Preferred communication style: Simple, everyday language.
 **Database Connection**: Pooled connections using `@neondatabase/serverless` Pool with WebSocket constructor for compatibility
 
 **API Design**: RESTful endpoints under `/api/*` namespace:
-- `/api/files/*` - File upload and retrieval
+- `/api/files/*` - File upload, retrieval, and download (with signed URLs)
 - `/api/jobs/*` - Job management (list, retry, cancel)
-- `/api/kb/*` - Knowledge base entries
+- `/api/kb/*` - Knowledge base entries with search/filter/sort
 - `/api/stats` - Dashboard statistics
+- `/api/scanner/*` - Local drive scanning and batch import with security whitelisting
 
 **Worker Architecture**: Separate worker modules for asynchronous processing:
 - **Dispatcher** (`server/workers/dispatcher.ts`): Runs on interval (10s default) to dequeue jobs and create job runs for each tenant
 - **Processor** (`server/workers/processor.ts`): Executes job runs for text extraction and AI analysis
 - **Text Extractor** (`server/workers/text-extractor.ts`): Extracts text from uploaded files (currently simplified, production would use pdf-parse, mammoth, etc.)
-- **AI Analyzer** (`server/workers/ai-analyzer.ts`): Uses Gemini or Claude to analyze extracted text and generate structured metadata (title, summary, category, tags)
+- **AI Analyzer** (`server/workers/ai-analyzer.ts`): Uses Gemini, Claude, or OpenAI (GPT-4o-mini) to analyze extracted text and generate structured metadata (title, summary, category, tags)
 
 **Job Processing Flow** (Fully Implemented):
 1. File uploaded via drag-and-drop or file selector → Stored to `uploads/` directory → Job created with `kind: "text_extract"` and `status: "queued"`
