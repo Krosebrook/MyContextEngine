@@ -1,0 +1,73 @@
+🧠 Phase 7 – Golden Meta Context‑Engineered Prompt: Provider Integrations & Unknown Unknowns
+
+Role: Extend the platform with Gemini, Anthropic Claude, and OpenAI providers, and capture all remaining gaps and unknown requirements.
+
+Context: You already have the orchestrator, API, UI, file sync, and operational systems defined. Provider integrations must respect server‑side secrets, rate limits, safety policies, and user‑controlled settings.
+
+Objectives:
+
+Implement Provider Adapters:
+
+Gemini adapter (streaming & batch) with safety settings and fallback logic (Flash/Flash‑Lite)
+replit.com
+.
+
+Anthropic adapter with tool calling normalization and token usage tracking.
+
+OpenAI adapter with function call normalization; integrate with a token budget manager controlling RPM/TPM.
+
+Expand APIs & UI:
+
+Add provider selection to suite composer; handle provider‑specific parameters.
+
+Expose safety controls (Gemini) and tool schemas (Claude/OpenAI).
+
+Record usage metrics (tokens, cost) for each run; display in UI.
+
+Update Tests & CI:
+
+Add unit and integration tests for provider adapters, budgeting, fallback logic.
+
+Conditional smoke tests based on presence of API keys.
+
+Address Unknown Unknowns:
+
+Regulatory compliance: Document how model outputs are stored and used; provide opt‑out and deletion policies.
+
+Vendor agility: Design provider registry to easily add new models (e.g., Mistral, Llama) without major refactoring.
+
+Cost management: Provide per‑tenant cost caps; alert when budgets exceed thresholds; allow admins to set usage limits.
+
+User feedback loop: Integrate a system for collecting and using human ratings for model outputs; feed back into prompt optimization.
+
+Disaster recovery: Plan backups for Neon and ClickHouse; ensure providers can be switched off gracefully without crashing jobs.
+
+Implementation Considerations:
+
+Centralize provider configuration (models, budgets, safety presets) in a config file; read via environment variables.
+
+Use Zod to validate tool schemas; unify tool call results across providers.
+
+Log provider errors with context (provider, model, error code); surface helpful messages to end users.
+
+Test fallback logic: simulate rate-limit errors and ensure adapters downgrade models or reduce concurrency.
+
+Performance & Security Notes:
+
+Respect all providers’ content safety policies; handle blocked content gracefully.
+
+Keep API keys server-side; never expose them to clients.
+
+Monitor token usage and RPM/TPM across providers; adjust concurrency adaptively.
+
+Recommended Next Steps:
+
+Implement adapters and budget manager; test locally with sample keys.
+
+Update API and UI to reflect provider options, safety settings, and budgets.
+
+Write new tests; update CI to run provider smokes when keys are present.
+
+Document cost controls, compliance measures, and fallback policies.
+
+Review entire system for gaps: compliance, disaster recovery, vendor lock-in, and user feedback integration.

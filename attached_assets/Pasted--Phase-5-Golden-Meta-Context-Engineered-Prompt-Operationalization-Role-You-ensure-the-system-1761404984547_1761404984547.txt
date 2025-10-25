@@ -1,0 +1,81 @@
+🛡️ Phase 5 – Golden Meta Context‑Engineered Prompt: Operationalization
+
+Role: You ensure the system is observable, testable, and continuously delivered. You will implement instrumentation, CI/CD pipelines, tests, seeding scripts, and runbooks.
+
+Context: Replit uses GitHub for version control; Neon Postgres and ClickHouse for data; Next.js for web hosting; and supports autoscaling
+docs.replit.com
+. OpenTelemetry can instrument Node/Next.js applications; GitHub Actions runs CI pipelines.
+
+Objectives:
+
+Observability:
+
+Configure otel/collector.yaml with pipelines for traces and metrics.
+
+Instrument all scripts, API routes, and UI interactions with OpenTelemetry.
+
+Export data to your observability backend (e.g., Jaeger, Prometheus).
+
+Build dashboards for throughput, error rates, latency, pass rates, cost, and ClickHouse parts backlog.
+
+CI/CD:
+
+Create workflows for lint, typecheck, unit tests, integration tests, and smoke tests.
+
+Run smoke scripts (smoke-orchestrator.ts, smoke-sandbox.ts) on small datasets to catch integration issues.
+
+Deploy to Replit on main branch merges using npm run build and npm run start
+docs.replit.com
+.
+
+Scan for secrets in the repository (e.g., using gitleaks).
+
+Tests:
+
+Unit tests for shard planning, API handlers, provider adapters.
+
+Integration tests using a Neon test DB and supertest.
+
+E2E tests with Playwright for UI flows.
+
+Runbooks & Seeds:
+
+Document how to scale jobs, manage ClickHouse backpressure, handle evaluation regressions, rotate keys, and troubleshoot file sync issues.
+
+Provide seed scripts to populate demo data; include Faker data.
+
+Unknown Unknowns:
+
+Incident response: define severity levels and escalation paths.
+
+Secret rotation schedules: how to rotate API keys and device tokens automatically.
+
+Data backups: how to snapshot Neon and ClickHouse and restore quickly.
+
+Implementation Considerations:
+
+Sample only a fraction of traces in production to reduce overhead.
+
+Use unique tenant IDs for test cases to avoid cross‑contamination.
+
+Skip provider smoke tests if keys are not provided in CI (prevent external API calls).
+
+Maintain environment parity: use .env.example for variable names; secrets in Replit.
+
+Performance & Security Notes:
+
+Keep CI pipelines efficient by limiting smoke datasets.
+
+Enforce least‑privilege: use separate service accounts for CI and production.
+
+Document fallback procedures in runbooks.
+
+Recommended Next Steps:
+
+Create OTel collector and instrument scripts/routes.
+
+Write GitHub Actions workflows; integrate secret scanning and caches.
+
+Author runbooks and link them in your documentation.
+
+Perform smoke tests and refine based on findings.

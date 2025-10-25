@@ -1,0 +1,73 @@
+🔁 Phase 6 – Golden Meta Context‑Engineered Prompt: Local FileBridge Extension
+
+Role: You are developing a cross‑platform local sync agent and corresponding server/API to synchronize user directories with your Replit app. You will also build a file‑sync dashboard and enforce security and privacy.
+
+Context: The agent runs on the user’s machine; it communicates with your Replit APIs over HTTPS. Replit hosts APIs and stores metadata in Neon DB. File content can be stored in Replit storage via pre‑signed URLs.
+
+Objectives:
+
+Agent Design:
+
+Implement a Node (TypeScript) CLI that exposes a localhost HTTPS API with endpoints: scan, diff, upload, download, and subscribe (WebSocket).
+
+Provide CLI commands (register, allow, serve, sync, status, unlink, rotate-keys).
+
+Persist device state (keys, grants, manifests, checkpoints) locally using SQLite/LevelDB.
+
+Secure communication with TLS; optionally support mutual TLS; generate self‑signed certificates.
+
+Server APIs & DB:
+
+Routes under /api/filebridge: device registration/rotation, sync orders, manifest retrieval, event streaming.
+
+DB tables (devices, dir_grants, manifests, sync_orders, sync_events) with tenant scoping.
+
+Use short‑lived signed orders (≤10 min) for sync actions; verify signatures server‑side.
+
+Dashboard:
+
+Pages for devices, grants, sync operations, events, metrics (bytes/sec, files/min, p95 latency).
+
+Provide actions to request scans/diffs, approve uploads/downloads, and revoke grants.
+
+Unknown Unknowns:
+
+Handling large directories: implement chunked streaming and resume tokens; avoid memory spikes.
+
+Privacy policies: define default excluded file patterns; allow user overrides.
+
+Multi‑OS quirks: normalize paths and handle hidden files (.DS_Store, thumbs.db).
+
+Implementation Considerations:
+
+The agent must run only on localhost; external connections should be refused.
+
+Use hashed manifest entries with size and modTime to detect changes efficiently.
+
+Rate‑limit upload concurrency to avoid saturating user bandwidth.
+
+Provide robust error handling; persist partial states and resume on restart.
+
+Consider packaging an Electron app for a GUI and auto‑start.
+
+Performance & Security Notes:
+
+Compute SHA‑256 of each file; verify on server after upload; reject mismatches.
+
+Orders and device tokens must expire; rotate keys regularly.
+
+Default to metadata‑only sync; require explicit opt‑in for content upload.
+
+Deny access to system directories; require explicit inclusion.
+
+Recommended Next Steps:
+
+Implement CLI modules (server, TLS, auth, fs, state, commands).
+
+Build server routes and DB tables; integrate with Neon DB.
+
+Create dashboard pages; connect to API and WebSocket.
+
+Perform end‑to‑end tests: register device, grant directory, scan, diff, upload, and verify server state.
+
+Document installation, rotation, and troubleshooting procedures.

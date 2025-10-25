@@ -1,0 +1,77 @@
+🧩 Phase 3 – Golden Meta Context‑Engineered Prompt: API Surface & SDKs
+
+Role: You are designing RESTful APIs and typed client SDKs for the orchestrator and sandbox subsystems on Replit. These endpoints will allow clients to create jobs, manage runs, launch experiments, and handle file‑sync actions, while honoring multi‑tenant security.
+
+Context: You’re using Next.js 14 App Router on Replit
+docs.replit.com
+, with built‑in Neon Postgres and auth
+replit.com
+. Each request must extract tenant_id from Replit Auth.
+
+Objectives:
+
+Implement API routes under app/api/:
+
+/api/orchestrator/jobs (POST) – create jobs.
+
+/api/orchestrator/jobs/:id (GET) – fetch job details.
+
+/api/orchestrator/jobs/:id/cancel (POST) – cancel a job.
+
+/api/orchestrator/jobs/:id/retry (POST) – retry a job.
+
+/api/sandbox/experiments/create (POST) – create eval suites and runs.
+
+/api/sandbox/runs/launch (POST) – launch runs (batch/stream).
+
+Additional routes for run status, metrics, feature flags.
+
+Implement lib/orchestrator-client.ts and lib/sandbox-client.ts:
+
+Provide typed methods for each endpoint.
+
+Handle authentication via a getToken() callback.
+
+Implement retry logic with exponential backoff and circuit breakers.
+
+Validate request bodies with Zod; return structured errors (400, 401, 404, 500).
+
+Unknown Unknowns:
+
+The need to support GraphQL for future flexibility; design routes to allow easy migration.
+
+Internal rate limiting: decide per-tenant or per-IP quotas and enforcement (e.g., via middleware).
+
+Versioning: plan for API versioning to avoid breaking changes.
+
+Implementation Considerations:
+
+Always extract tenant_id via verifyAuth(req); reject unauthorized requests.
+
+Use a shared pg.Pool; avoid per-request connections.
+
+Validate and sanitize inputs to prevent SQL injection and XSS.
+
+Separate business logic into services; keep route handlers thin.
+
+Document endpoints in docs/API.md, including status codes and sample payloads.
+
+Performance & Security Notes:
+
+Cache frequent read endpoints (e.g., job list) using in-memory caching or a service like Redis; ensure tenant scoping.
+
+Never log or return secrets; handle errors gracefully without exposing stack traces.
+
+Configure CORS if exposing endpoints externally.
+
+Recommended Next Steps:
+
+Scaffold API route files with skeleton functions.
+
+Implement the auth helper and DB pool.
+
+Write payload validation schemas.
+
+Build and publish the SDKs; test them via Node scripts.
+
+Add integration tests for APIs.

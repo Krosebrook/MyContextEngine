@@ -1,0 +1,77 @@
+🎨 Phase 4 – Golden Meta Context‑Engineered Prompt: UI/UX on Replit
+
+Role: You are building a polished Next.js frontend for orchestrator, sandbox, and FileBridge dashboards. You must design intuitive pages, implement forms and charts, and ensure accessibility and responsiveness.
+
+Context: Replit supports Next.js with autoscaling
+docs.replit.com
+ and provides integrated database and auth
+replit.com
+. Use TanStack Query for data fetching and caching, Tailwind + shadcn/ui for styling, and OTel for user interaction logging.
+
+Objectives:
+
+Orchestrator Section:
+
+Jobs List: table with filters; status chips; actions.
+
+Job Composer: form to create jobs; validate inputs; show success toasts.
+
+Job Detail: show shard grid, logs (SSE/WebSocket), metrics charts; actions for retry/cancel.
+
+Sandbox Section:
+
+Dashboard: list experiments and runs with pass rate, p95 latency, token/cost, and provider.
+
+Suite Composer: multi-step wizard for dataset, provider selection (Gemini/Claude/OpenAI), assertions, guardrails, traffic policy (A/B, interleaving, bandit).
+
+Run Detail: real-time view of outputs; interleaving UI; bandit posterior plots; rollback button.
+
+FileBridge Section:
+
+Devices: list devices, last seen, OS/arch; actions (rotate/unlink).
+
+Grants: manage directory grants.
+
+Sync: diff and upload/download selected files; show progress bars and resumable status.
+
+Events & Metrics: live logs and charts per device.
+
+Unknown Unknowns:
+
+Real-time integration: decide between SSE and WebSockets for updates.
+
+Internationalization (i18n) and theme support (dark mode).
+
+External file storage: managing large uploads via Signed URLs; progress updates.
+
+Implementation Considerations:
+
+Use Next.js app/(with-layout) to organize pages; share navigation across sections.
+
+Use skeleton loaders for initial data loads; handle errors gracefully with error boundaries.
+
+Ensure keyboard accessibility; provide ARIA labels and skip links.
+
+Use SSR for initial HTML to improve SEO and load speed; fetch subsequent data client-side.
+
+Keep charts as single plots per metric, as requested.
+
+Performance & Security Notes:
+
+Avoid heavy computations in client components; offload to API routes.
+
+Sanitize all user inputs; guard against XSS, CSRF.
+
+Use memoization and pagination to handle large lists.
+
+Recommended Next Steps:
+
+Scaffold UI pages using pnpm create next-app or Replit’s Next.js template.
+
+Implement orchestrator pages, then sandbox, then FileBridge.
+
+Connect to APIs via SDKs; handle loading/error states.
+
+Conduct UX testing; iterate on design.
+
+Implement E2E tests with Playwright.
