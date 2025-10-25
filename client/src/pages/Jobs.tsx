@@ -1,6 +1,8 @@
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { JobsTable, Job } from "@/components/JobsTable";
 import { Button } from "@/components/ui/button";
-import { Plus, Filter } from "lucide-react";
+import { Filter, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -10,70 +12,60 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Jobs() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const { toast } = useToast();
 
-  const mockJobs: Job[] = [
-    {
-      id: "job-001-abc-def-ghi",
-      kind: "neon_to_clickhouse",
-      status: "running",
-      priority: 100,
-      scheduledAt: new Date(Date.now() - 3600000).toISOString(),
-      startedAt: new Date(Date.now() - 1800000).toISOString(),
-      attempts: 1,
-      maxAttempts: 5,
-    },
-    {
-      id: "job-002-xyz-uvw-rst",
-      kind: "reindex",
-      status: "succeeded",
-      priority: 80,
-      scheduledAt: new Date(Date.now() - 7200000).toISOString(),
-      startedAt: new Date(Date.now() - 6000000).toISOString(),
-      finishedAt: new Date(Date.now() - 3000000).toISOString(),
-      attempts: 1,
-      maxAttempts: 5,
-    },
-    {
-      id: "job-003-lmn-opq-tuv",
-      kind: "custom",
-      status: "failed",
-      priority: 90,
-      scheduledAt: new Date(Date.now() - 10800000).toISOString(),
-      startedAt: new Date(Date.now() - 9000000).toISOString(),
-      finishedAt: new Date(Date.now() - 8000000).toISOString(),
-      attempts: 3,
-      maxAttempts: 5,
-    },
-    {
-      id: "job-004-wxy-zab-cde",
-      kind: "neon_to_clickhouse",
-      status: "queued",
-      priority: 100,
-      scheduledAt: new Date(Date.now() + 1800000).toISOString(),
-      attempts: 0,
-      maxAttempts: 5,
-    },
-    {
-      id: "job-005-fgh-ijk-lmn",
-      kind: "reindex",
-      status: "canceled",
-      priority: 60,
-      scheduledAt: new Date(Date.now() - 14400000).toISOString(),
-      startedAt: new Date(Date.now() - 12600000).toISOString(),
-      finishedAt: new Date(Date.now() - 12000000).toISOString(),
-      attempts: 1,
-      maxAttempts: 5,
-    },
-  ];
+  const { data: allJobs = [], isLoading } = useQuery<Job[]>({
+    queryKey: ["/api/jobs"],
+    refetchInterval: 5000, // Refresh every 5 seconds
+  });
 
-  const filteredJobs = mockJobs.filter((job) => {
+  const retryMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      return apiRequest("POST", `/api/jobs/${jobId}/retry`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({
+        title: "Job queued for retry",
+        description: "The job will be reprocessed",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Retry failed",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      return apiRequest("POST", `/api/jobs/${jobId}/cancel`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({
+        title: "Job canceled",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Cancel failed",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const filteredJobs = allJobs.filter((job) => {
     const matchesStatus = statusFilter === "all" || job.status === statusFilter;
-    const matchesSearch = job.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         job.kind.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch =
+      job.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.kind.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesStatus && matchesSearch;
   });
 
@@ -83,13 +75,9 @@ export default function Jobs() {
         <div>
           <h1 className="text-3xl font-medium">Jobs</h1>
           <p className="text-muted-foreground mt-1">
-            Manage and monitor your data processing jobs
+            Monitor file processing and AI analysis jobs
           </p>
         </div>
-        <Button data-testid="button-create-job">
-          <Plus className="h-4 w-4 mr-2" />
-          Create Job
-        </Button>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4">
@@ -119,20 +107,30 @@ export default function Jobs() {
         </div>
       </div>
 
-      <JobsTable 
-        jobs={filteredJobs}
-        onViewDetails={(id) => console.log('View job:', id)}
-        onRetry={(id) => console.log('Retry job:', id)}
-        onCancel={(id) => console.log('Cancel job:', id)}
-      />
-
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <span>Showing {filteredJobs.length} of {mockJobs.length} jobs</span>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" disabled>Previous</Button>
-          <Button variant="outline" size="sm">Next</Button>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      </div>
+      ) : filteredJobs.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground border rounded-md">
+          No jobs found. Upload some files to create processing jobs.
+        </div>
+      ) : (
+        <>
+          <JobsTable
+            jobs={filteredJobs}
+            onViewDetails={(id) => console.log("View job:", id)}
+            onRetry={(id) => retryMutation.mutate(id)}
+            onCancel={(id) => cancelMutation.mutate(id)}
+          />
+
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>
+              Showing {filteredJobs.length} of {allJobs.length} jobs
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
