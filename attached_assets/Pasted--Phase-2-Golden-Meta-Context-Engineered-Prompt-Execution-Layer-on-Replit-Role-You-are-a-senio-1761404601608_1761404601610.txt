@@ -1,0 +1,79 @@
+🎯 Phase 2 – Golden Meta Context‑Engineered Prompt: Execution Layer on Replit
+
+Role: You are a senior platform engineer implementing the execution layer of a multi‑tenant orchestration system on Replit. Your goal is to schedule and execute database‑driven jobs using Replit’s Workflows, Neon Postgres, and optional ClickHouse, while enforcing tenant isolation and handling idempotent retries.
+
+Context: Replit provides integrated Neon Postgres and auth
+replit.com
+, a built‑in Agent for UI and deployment
+replit.com
+, and Next.js with autoscaling
+docs.replit.com
+. Each Replit repl runs on a single vCPU by default
+docs.replit.com
+, so concurrency must be managed carefully.
+
+Objectives:
+
+Implement a dispatcher script that runs via Replit Workflows on a schedule (e.g., every minute). It should:
+
+Dequeue jobs scheduled or ready to run.
+
+Update their status to running.
+
+Plan shards based on batch_size and parallelism.
+
+Insert job_runs rows for each shard, initializing status to queued.
+
+Implement worker scripts that:
+
+Continuously fetch queued job_runs, mark them as running, and record start times.
+
+Pull data from Neon Postgres, transform as needed, and write to ClickHouse (sync or async).
+
+Persist checkpoints (job_runs.checkpoint) and mark runs succeeded or failed with detailed errors.
+
+Handle idempotent retries using deduplication keys (e.g., (tenant_id, id)).
+
+Develop experiment runners for offline batch evaluations and online A/B, interleaving, and bandit experiments. These will pull data, call model providers, store results, and emit metrics.
+
+Unknown Unknowns:
+
+How to adapt to Replit’s vCPU limits for heavy tasks; consider queue throttling or dividing workloads across multiple repls.
+
+Backpressure handling for ClickHouse: detect merge backlog and adjust parallelism or insert modes.
+
+The need for scheduling dynamic cron intervals based on job load.
+
+Implementation Considerations:
+
+Use pooled connections (pg.Pool) and release after use.
+
+Schedule dispatchers via Replit Workflows; ensure environment variables (DATABASE_URL, CLICKHOUSE_URL) are available.
+
+Use a checkpoint design (OFFSET or timestamp) to resume shards after failure.
+
+Instrument scripts with OpenTelemetry for visibility; annotate spans with tenant_id, job_id, shard.
+
+Configure exponential backoff and jitter when calling external providers (Gemini, Claude, OpenAI) to respect RPM/TPM quotas.
+
+Performance & Security Notes:
+
+Replit’s Neon DB has connection limits
+docs.replit.com
+; manage concurrency accordingly.
+
+Keep secrets (DB URLs, API keys) in Replit’s secrets manager; do not hard‑code them.
+
+Use tenant isolation in all queries.
+
+Recommended Next Steps:
+
+Scaffold dispatcher and worker scripts in apps/worker/src.
+
+Create a Replit Workflow to run dispatch on a schedule; run worker scripts via a persistent process (setInterval).
+
+Seed data and test with small job batches; verify shard planning and idempotent writes.
+
+Instrument with OTel; view spans in your collector.
+
+Build experiment runners and integrate provider calls.
