@@ -10,8 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, FileText, Loader2, Download } from "lucide-react";
-import { useState } from "react";
+import { Search, FileText, Loader2, Download, ArrowUpDown } from "lucide-react";
+import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 interface KbEntry {
@@ -28,6 +28,7 @@ interface KbEntry {
 export default function KnowledgeBase() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"date" | "title" | "category">("date");
   const { toast } = useToast();
 
   const { data: entries = [], isLoading } = useQuery<KbEntry[]>({
@@ -57,15 +58,31 @@ export default function KnowledgeBase() {
     },
   });
 
-  const filteredEntries = entries.filter((entry) => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      entry.title.toLowerCase().includes(query) ||
-      entry.summary.toLowerCase().includes(query) ||
-      entry.tags.some((tag) => tag.toLowerCase().includes(query))
-    );
-  });
+  const filteredAndSortedEntries = useMemo(() => {
+    let filtered = entries.filter((entry) => {
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+      return (
+        entry.title.toLowerCase().includes(query) ||
+        entry.summary.toLowerCase().includes(query) ||
+        entry.tags.some((tag) => tag.toLowerCase().includes(query))
+      );
+    });
+
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case "title":
+          return a.title.localeCompare(b.title);
+        case "category":
+          return a.category.localeCompare(b.category);
+        case "date":
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
+
+    return sorted;
+  }, [entries, searchQuery, sortBy]);
 
   const categories = ["Code", "Documentation", "Data", "Image", "Document", "Archive", "Other"];
 
@@ -115,13 +132,24 @@ export default function KnowledgeBase() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={sortBy} onValueChange={(val) => setSortBy(val as "date" | "title" | "category")}>
+          <SelectTrigger className="w-40" data-testid="select-sort">
+            <ArrowUpDown className="h-4 w-4 mr-2" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="date">Newest First</SelectItem>
+            <SelectItem value="title">By Title</SelectItem>
+            <SelectItem value="category">By Category</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : filteredEntries.length === 0 ? (
+      ) : filteredAndSortedEntries.length === 0 ? (
         <Card>
           <CardContent className="py-12">
             <div className="text-center text-muted-foreground">
@@ -135,7 +163,7 @@ export default function KnowledgeBase() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredEntries.map((entry) => (
+          {filteredAndSortedEntries.map((entry) => (
             <Card
               key={entry.id}
               className="hover-elevate"
