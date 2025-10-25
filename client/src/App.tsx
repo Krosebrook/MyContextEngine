@@ -12,6 +12,7 @@ import JobsRealtime from "@/pages/JobsRealtime";
 import Files from "@/pages/Files";
 import KnowledgeBase from "@/pages/KnowledgeBase";
 import Monitoring from "@/pages/Monitoring";
+import Scanner from "@/pages/Scanner";
 
 function Router() {
   return (
@@ -20,6 +21,7 @@ function Router() {
       <Route path="/files" component={Files} />
       <Route path="/kb" component={KnowledgeBase} />
       <Route path="/jobs" component={JobsRealtime} />
+      <Route path="/scanner" component={Scanner} />
       <Route path="/monitoring" component={Monitoring} />
       <Route component={NotFound} />
     </Switch>

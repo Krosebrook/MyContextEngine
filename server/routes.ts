@@ -217,6 +217,184 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Scan local directory
+  app.post("/api/scanner/scan", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const { path } = req.body;
+      if (!path) {
+        return res.status(400).json({ error: "Path is required" });
+      }
+
+      const pathModule = await import("path");
+      const os = await import("os");
+      
+      // Security: Whitelist allowed scan paths per environment
+      const allowedRoots = [
+        pathModule.join(process.cwd(), "uploads"),
+        os.homedir(),
+      ];
+      
+      // Add platform-specific common paths
+      if (process.platform === "win32") {
+        allowedRoots.push("C:\\", "D:\\", "C:\\Users");
+      } else {
+        allowedRoots.push("/", "/home", "/tmp");
+      }
+      
+      // Security: Proper path boundary check to prevent prefix bypass
+      const resolvedPath = pathModule.resolve(path);
+      const isAllowed = allowedRoots.some(root => {
+        const resolvedRoot = pathModule.resolve(root);
+        const relativePath = pathModule.relative(resolvedRoot, resolvedPath);
+        // Allow exact root match (empty string) or paths within root
+        return (relativePath === '' || (!relativePath.startsWith('..') && !pathModule.isAbsolute(relativePath)));
+      });
+      
+      if (!isAllowed) {
+        return res.status(403).json({ 
+          error: "Access denied: Path not in allowed list",
+          allowedRoots 
+        });
+      }
+
+      const fs = await import("fs/promises");
+      
+      const scanDir = async (dirPath: string, depth = 0): Promise<any[]> => {
+        if (depth > 3) return [];
+        
+        try {
+          const entries = await fs.readdir(dirPath, { withFileTypes: true });
+          const results = [];
+          
+          for (const entry of entries.slice(0, 100)) {
+            const fullPath = pathModule.join(dirPath, entry.name);
+            
+            if (entry.isDirectory()) {
+              if (!entry.name.startsWith('.') && entry.name !== 'node_modules') {
+                const subFiles = await scanDir(fullPath, depth + 1);
+                results.push(...subFiles);
+              }
+            } else if (entry.isFile()) {
+              const stats = await fs.stat(fullPath);
+              if (stats.size < 100 * 1024 * 1024) {
+                results.push({
+                  path: fullPath,
+                  name: entry.name,
+                  size: stats.size,
+                  modified: stats.mtime,
+                });
+              }
+            }
+            
+            if (results.length > 500) break;
+          }
+          
+          return results;
+        } catch (error) {
+          console.error(`Error scanning ${dirPath}:`, error);
+          return [];
+        }
+      };
+
+      const files = await scanDir(resolvedPath);
+      res.json({ files });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Import scanned files
+  app.post("/api/scanner/import", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const { files } = req.body;
+      
+      if (!Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({ error: "Files array is required" });
+      }
+
+      const fs = await import("fs/promises");
+      const pathModule = await import("path");
+      const crypto = await import("crypto");
+      const os = await import("os");
+      
+      // Security: Whitelist allowed paths (same as scan endpoint)
+      const allowedRoots = [
+        pathModule.join(process.cwd(), "uploads"),
+        os.homedir(),
+      ];
+      
+      if (process.platform === "win32") {
+        allowedRoots.push("C:\\", "D:\\", "C:\\Users");
+      } else {
+        allowedRoots.push("/", "/home", "/tmp");
+      }
+      
+      const imported = [];
+      const rejected = [];
+      
+      for (const filePath of files.slice(0, 50)) {
+        try {
+          // Security: Proper path boundary check to prevent prefix bypass
+          const resolvedPath = pathModule.resolve(filePath);
+          const isAllowed = allowedRoots.some(root => {
+            const resolvedRoot = pathModule.resolve(root);
+            const relativePath = pathModule.relative(resolvedRoot, resolvedPath);
+            // Allow exact root match (empty string) or paths within root
+            return (relativePath === '' || (!relativePath.startsWith('..') && !pathModule.isAbsolute(relativePath)));
+          });
+          
+          if (!isAllowed) {
+            rejected.push({ path: filePath, reason: "Path not in allowed list" });
+            continue;
+          }
+          
+          const fileName = pathModule.basename(filePath);
+          const fileBuffer = await fs.readFile(filePath);
+          const fileId = crypto.randomUUID();
+          const uploadDir = pathModule.join(process.cwd(), "uploads", tenantId);
+          await fs.mkdir(uploadDir, { recursive: true });
+          
+          const uploadPath = pathModule.join(uploadDir, `${fileId}_${fileName}`);
+          await fs.writeFile(uploadPath, fileBuffer);
+          
+          const stats = await fs.stat(filePath);
+          const fileRecord = await storage.createFile({
+            tenantId,
+            filename: `${fileId}_${fileName}`,
+            originalName: fileName,
+            mimeType: "application/octet-stream",
+            size: stats.size,
+            uploadPath: uploadPath,
+            status: "pending",
+          });
+          
+          await storage.createJob({
+            tenantId,
+            kind: "text_extract",
+            status: "queued",
+            metadata: { fileId: fileRecord.id },
+          });
+          
+          imported.push(fileRecord);
+        } catch (error) {
+          console.error(`Failed to import ${filePath}:`, error);
+          rejected.push({ path: filePath, reason: error instanceof Error ? error.message : "Unknown error" });
+        }
+      }
+      
+      res.json({ 
+        imported: imported.length, 
+        rejected: rejected.length,
+        files: imported,
+        rejectedFiles: rejected 
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

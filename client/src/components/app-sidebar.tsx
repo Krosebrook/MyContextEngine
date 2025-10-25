@@ -17,7 +17,8 @@ import {
   BookOpen,
   Settings,
   Database,
-  Activity
+  Activity,
+  HardDrive
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -41,6 +42,11 @@ const mainItems = [
     title: "Jobs",
     url: "/jobs",
     icon: Briefcase,
+  },
+  {
+    title: "Drive Scanner",
+    url: "/scanner",
+    icon: HardDrive,
   },
 ];
 

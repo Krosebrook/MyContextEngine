@@ -55,17 +55,6 @@ Please provide your response in this exact JSON format:
           return JSON.parse(jsonMatch[0]);
         }
       }
-    } else if (process.env.GEMINI_API_KEY) {
-      const response = await genai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
-        contents: prompt
-      });
-      const responseText = response.text || "";
-      
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
     } else if (provider === "openai" && process.env.OPENAI_API_KEY) {
       const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -76,6 +65,17 @@ Please provide your response in this exact JSON format:
 
       const content = response.choices[0]?.message?.content || "";
       const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+    } else if (provider === "gemini" && process.env.GEMINI_API_KEY) {
+      const response = await genai.models.generateContent({
+        model: "gemini-2.0-flash-exp",
+        contents: prompt
+      });
+      const responseText = response.text || "";
+      
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
       }
