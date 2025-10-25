@@ -6,7 +6,7 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const genai = new GoogleGenAI(process.env.GEMINI_API_KEY || "");
+const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 interface AnalysisResult {
   title: string;
@@ -51,9 +51,11 @@ Please provide your response in this exact JSON format:
         }
       }
     } else if (process.env.GEMINI_API_KEY) {
-      const model = genai.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-      const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
+      const response = await genai.models.generateContent({
+        model: "gemini-2.0-flash-exp",
+        contents: prompt
+      });
+      const responseText = response.text || "";
       
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
