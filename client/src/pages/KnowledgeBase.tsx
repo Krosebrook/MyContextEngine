@@ -1,7 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -9,8 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, FileText, Loader2 } from "lucide-react";
+import { Search, FileText, Loader2, Download } from "lucide-react";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 interface KbEntry {
   id: string;
@@ -26,9 +28,33 @@ interface KbEntry {
 export default function KnowledgeBase() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const { toast } = useToast();
 
   const { data: entries = [], isLoading } = useQuery<KbEntry[]>({
     queryKey: ["/api/kb", categoryFilter !== "all" ? `?category=${categoryFilter}` : ""],
+  });
+
+  const downloadMutation = useMutation({
+    mutationFn: async (fileId: string) => {
+      const response = await fetch(`/api/files/${fileId}/download`);
+      if (!response.ok) throw new Error("Download failed");
+      const data = await response.json();
+      return data.url;
+    },
+    onSuccess: (url: string) => {
+      window.open(url, "_blank");
+      toast({
+        title: "Download started",
+        description: "Your file will download shortly",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Download failed",
+        description: "Could not generate download link",
+        variant: "destructive",
+      });
+    },
   });
 
   const filteredEntries = entries.filter((entry) => {
@@ -112,7 +138,7 @@ export default function KnowledgeBase() {
           {filteredEntries.map((entry) => (
             <Card
               key={entry.id}
-              className="hover-elevate cursor-pointer"
+              className="hover-elevate"
               data-testid={`kb-entry-${entry.id}`}
             >
               <CardHeader>
@@ -143,8 +169,19 @@ export default function KnowledgeBase() {
                   </div>
                 )}
 
-                <div className="pt-2 border-t text-xs text-muted-foreground">
-                  {new Date(entry.createdAt).toLocaleDateString()}
+                <div className="pt-2 border-t flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(entry.createdAt).toLocaleDateString()}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => downloadMutation.mutate(entry.fileId)}
+                    disabled={downloadMutation.isPending}
+                    data-testid={`button-download-${entry.id}`}
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>

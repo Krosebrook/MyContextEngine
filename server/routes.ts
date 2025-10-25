@@ -5,7 +5,7 @@ import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { syncFileToSupabase, syncJobToSupabase } from "./supabase-sync";
+import { syncFileToSupabase, syncJobToSupabase, getFileDownloadUrl } from "./supabase-sync";
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -166,6 +166,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.json(entries);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Download file with signed URL
+  app.get("/api/files/:id/download", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const file = await storage.getFile(tenantId, req.params.id);
+      if (!file) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      
+      const storagePath = `${tenantId}/${file.id}/${file.originalName}`;
+      const signedUrl = await getFileDownloadUrl(storagePath);
+      
+      if (!signedUrl) {
+        return res.status(404).json({ error: "File not found in storage" });
+      }
+      
+      res.json({ url: signedUrl });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

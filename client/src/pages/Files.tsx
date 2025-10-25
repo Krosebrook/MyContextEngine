@@ -27,6 +27,8 @@ export default function Files() {
     queryKey: ["/api/files"],
   });
 
+  const [uploadQueue, setUploadQueue] = useState<{ file: File; status: 'pending' | 'uploading' | 'success' | 'error'; id: string }[]>([]);
+
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       const formData = new FormData();
@@ -38,17 +40,19 @@ export default function Files() {
       if (!response.ok) throw new Error("Upload failed");
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, file) => {
       queryClient.invalidateQueries({ queryKey: ["/api/files"] });
-      toast({
-        title: "Upload successful",
-        description: "File is being processed",
-      });
+      setUploadQueue(prev => prev.map(item => 
+        item.file === file ? { ...item, status: 'success' } : item
+      ));
     },
-    onError: (error: any) => {
+    onError: (error: any, file) => {
+      setUploadQueue(prev => prev.map(item => 
+        item.file === file ? { ...item, status: 'error' } : item
+      ));
       toast({
         title: "Upload failed",
-        description: error.message,
+        description: `${file.name}: ${error.message}`,
         variant: "destructive",
       });
     },
@@ -58,13 +62,52 @@ export default function Files() {
     e.preventDefault();
     setIsDragging(false);
     const droppedFiles = Array.from(e.dataTransfer.files);
-    droppedFiles.forEach((file) => uploadMutation.mutate(file));
+    const newUploads = droppedFiles.map(file => ({
+      file,
+      status: 'pending' as const,
+      id: Math.random().toString(36)
+    }));
+    setUploadQueue(prev => [...prev, ...newUploads]);
+    
+    droppedFiles.forEach((file) => {
+      setUploadQueue(prev => prev.map(item => 
+        item.file === file ? { ...item, status: 'uploading' } : item
+      ));
+      uploadMutation.mutate(file);
+    });
+
+    if (droppedFiles.length > 1) {
+      toast({
+        title: "Bulk upload started",
+        description: `Processing ${droppedFiles.length} files`,
+      });
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = e.target.files;
     if (selectedFiles) {
-      Array.from(selectedFiles).forEach((file) => uploadMutation.mutate(file));
+      const filesArray = Array.from(selectedFiles);
+      const newUploads = filesArray.map(file => ({
+        file,
+        status: 'pending' as const,
+        id: Math.random().toString(36)
+      }));
+      setUploadQueue(prev => [...prev, ...newUploads]);
+      
+      filesArray.forEach((file) => {
+        setUploadQueue(prev => prev.map(item => 
+          item.file === file ? { ...item, status: 'uploading' } : item
+        ));
+        uploadMutation.mutate(file);
+      });
+
+      if (filesArray.length > 1) {
+        toast({
+          title: "Bulk upload started",
+          description: `Processing ${filesArray.length} files`,
+        });
+      }
     }
   };
 
@@ -91,6 +134,32 @@ export default function Files() {
           </p>
         </div>
       </div>
+
+      {uploadQueue.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Upload Queue ({uploadQueue.filter(u => u.status === 'success').length}/{uploadQueue.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {uploadQueue.slice(0, 5).map((upload) => (
+                <div key={upload.id} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="truncate flex-1">{upload.file.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{formatFileSize(upload.file.size)}</span>
+                    {upload.status === 'uploading' && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
+                    {upload.status === 'success' && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                    {upload.status === 'error' && <XCircle className="h-4 w-4 text-red-600" />}
+                  </div>
+                </div>
+              ))}
+              {uploadQueue.length > 5 && (
+                <p className="text-xs text-muted-foreground">+{uploadQueue.length - 5} more files</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card
         className={`border-2 border-dashed cursor-pointer hover-elevate ${isDragging ? "border-primary bg-primary/5" : ""}`}

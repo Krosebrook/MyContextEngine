@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
 import path from "path";
 
 const anthropic = new Anthropic({
@@ -7,6 +8,10 @@ const anthropic = new Anthropic({
 });
 
 const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 interface AnalysisResult {
   title: string;
@@ -18,7 +23,7 @@ interface AnalysisResult {
 export async function analyzeWithAI(
   text: string,
   originalFilename: string,
-  provider: "gemini" | "claude" = "gemini"
+  provider: "gemini" | "claude" | "openai" = "gemini"
 ): Promise<AnalysisResult> {
   const prompt = `Analyze the following file content and provide a structured analysis.
 
@@ -58,6 +63,19 @@ Please provide your response in this exact JSON format:
       const responseText = response.text || "";
       
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+    } else if (provider === "openai" && process.env.OPENAI_API_KEY) {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.2,
+        max_tokens: 1024,
+      });
+
+      const content = response.choices[0]?.message?.content || "";
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
       }
