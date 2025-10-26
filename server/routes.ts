@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -21,13 +22,35 @@ const upload = multer({
   },
 });
 
+// Extract tenant ID from authenticated user session
+// In production, this uses the user's ID. Falls back to "default-tenant" for backwards compatibility during migration
 function getTenantId(req: any): string {
-  return req.session?.tenantId || "default-tenant";
+  // If authenticated, use the user's ID as tenant ID (1:1 user-to-tenant mapping)
+  if (req.user?.claims?.sub) {
+    return req.user.claims.sub;
+  }
+  // Fallback for development/migration
+  return "default-tenant";
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // File upload endpoint
-  app.post("/api/files/upload", upload.single("file"), async (req, res) => {
+  // Setup Replit Auth (sessions, passport, OAuth)
+  await setupAuth(app);
+
+  // Auth endpoint - returns current user info
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // File upload endpoint (protected)
+  app.post("/api/files/upload", isAuthenticated, upload.single("file"), async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       
@@ -66,8 +89,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // List files
-  app.get("/api/files", async (req, res) => {
+  // List files (protected)
+  app.get("/api/files", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const files = await storage.listFiles(tenantId);
@@ -77,8 +100,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get single file
-  app.get("/api/files/:id", async (req, res) => {
+  // Get single file (protected)
+  app.get("/api/files/:id", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const file = await storage.getFile(tenantId, req.params.id);
@@ -91,8 +114,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // List jobs
-  app.get("/api/jobs", async (req, res) => {
+  // List jobs (protected)
+  app.get("/api/jobs", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const status = req.query.status as string | undefined;
@@ -103,8 +126,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get single job
-  app.get("/api/jobs/:id", async (req, res) => {
+  // Get single job (protected)
+  app.get("/api/jobs/:id", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const job = await storage.getJob(tenantId, req.params.id);
@@ -117,8 +140,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Retry job
-  app.post("/api/jobs/:id/retry", async (req, res) => {
+  // Retry job (protected)
+  app.post("/api/jobs/:id/retry", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const job = await storage.getJob(tenantId, req.params.id);
@@ -134,8 +157,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Cancel job
-  app.post("/api/jobs/:id/cancel", async (req, res) => {
+  // Cancel job (protected)
+  app.post("/api/jobs/:id/cancel", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const job = await storage.getJob(tenantId, req.params.id);
@@ -151,8 +174,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // List KB entries
-  app.get("/api/kb", async (req, res) => {
+  // List KB entries (protected)
+  app.get("/api/kb", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const category = req.query.category as string | undefined;
@@ -171,8 +194,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Download file with signed URL
-  app.get("/api/files/:id/download", async (req, res) => {
+  // Download file with signed URL (protected)
+  app.get("/api/files/:id/download", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const file = await storage.getFile(tenantId, req.params.id);
@@ -193,8 +216,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Dashboard stats
-  app.get("/api/stats", async (req, res) => {
+  // Dashboard stats (protected)
+  app.get("/api/stats", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const files = await storage.listFiles(tenantId);
@@ -217,8 +240,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Scan local directory
-  app.post("/api/scanner/scan", async (req, res) => {
+  // Scan local directory (protected)
+  app.post("/api/scanner/scan", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const { path } = req.body;
@@ -304,8 +327,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Import scanned files
-  app.post("/api/scanner/import", async (req, res) => {
+  // Import scanned files (protected)
+  app.post("/api/scanner/import", isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const { files } = req.body;
