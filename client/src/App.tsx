@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Landing from "@/pages/Landing";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
@@ -35,11 +36,31 @@ function Router() {
   // Show main app if authenticated
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/files" component={Files} />
-      <Route path="/kb" component={KnowledgeBase} />
-      <Route path="/jobs" component={SystemMonitor} />
-      <Route path="/scanner" component={Scanner} />
+      <Route path="/">
+        <ErrorBoundary fallbackTitle="Dashboard Error" fallbackMessage="The dashboard encountered an issue. Try refreshing.">
+          <Dashboard />
+        </ErrorBoundary>
+      </Route>
+      <Route path="/files">
+        <ErrorBoundary fallbackTitle="File Upload Error" fallbackMessage="The file upload page encountered an issue. Try refreshing.">
+          <Files />
+        </ErrorBoundary>
+      </Route>
+      <Route path="/kb">
+        <ErrorBoundary fallbackTitle="Knowledge Base Error" fallbackMessage="The knowledge base encountered an issue. Try refreshing.">
+          <KnowledgeBase />
+        </ErrorBoundary>
+      </Route>
+      <Route path="/jobs">
+        <ErrorBoundary fallbackTitle="System Monitor Error" fallbackMessage="The system monitor encountered an issue. Try refreshing.">
+          <SystemMonitor />
+        </ErrorBoundary>
+      </Route>
+      <Route path="/scanner">
+        <ErrorBoundary fallbackTitle="Scanner Error" fallbackMessage="The scanner encountered an issue. Try refreshing.">
+          <Scanner />
+        </ErrorBoundary>
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );

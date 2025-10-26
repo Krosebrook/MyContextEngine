@@ -21,6 +21,7 @@ The frontend is built with React and TypeScript, utilizing Vite for development 
 **Auto-Refresh Architecture**: Upload success triggers automatic query invalidation for KB, files, and statistics queries. Users never need to manually refresh—the UI updates seamlessly within ~10 seconds of upload completion. Success toasts guide users to the Knowledge Base without requiring navigation.
 
 Key pages include:
+- **Landing**: Public-facing page for logged-out users with "Get Started" button triggering Replit Auth OAuth flow.
 - **Dashboard**: Overview of metrics and recent jobs (not yet implemented).
 - **Files**: Drag-and-drop upload interface with animated 3-stage progress indicators (Upload → Extract → Analyze), real-time status cards, and auto-refresh on completion.
 - **Knowledge Base**: Grid view of AI-analyzed content with stagger animations, sparkle icons, search filters, sorting, and download options. Uses loading skeletons instead of spinners.
@@ -58,13 +59,13 @@ The backend uses Express.js with TypeScript and ESM modules. It integrates with 
 - **Secondary Storage**: Supabase Storage for file uploads, utilizing signed URLs for secure access.
 - **Schema Design**: UUID primary keys, `tenantId` for multi-tenancy, status enums, and timestamps across tables. JSONB columns are used for flexible metadata.
 
-**Authentication & Authorization**: Currently uses a "default-tenant" but is designed for future integration with Replit Auth for user authentication and tenant identification via JWT claims, with application-layer row-level security.
+**Authentication & Authorization**: Fully integrated with Replit Auth using OpenID Connect. User sessions are managed via PostgreSQL-backed session store with automatic table creation. Multi-tenant isolation is enforced through application-layer filtering where `tenantId` equals the authenticated user's ID (extracted from JWT claims `req.user.claims.sub`). All API endpoints are protected with `isAuthenticated` middleware. Session cookies are environment-aware (secure in production, HTTP-compatible in development) with 7-day expiration and automatic token refresh.
 
 ## External Dependencies
 
 ### Third-Party Services
 
--   **Replit Platform Services**: Neon PostgreSQL, Supabase Storage, Replit Auth (planned), Replit Workflows, Replit deployment infrastructure.
+-   **Replit Platform Services**: Neon PostgreSQL, Supabase Storage, Replit Auth (integrated), Replit Workflows, Replit deployment infrastructure.
 -   **AI Model Providers**:
     -   **Google Gemini**: Models `gemini-2.0-flash`, `gemini-1.5-pro`, `gemini-1.5-flash` via `@google/genai`.
     -   **Anthropic Claude**: Models `claude-3-7-sonnet`, `claude-3-7-haiku`, `claude-3-opus` via `@anthropic-ai/sdk`.
@@ -87,6 +88,7 @@ Secrets are managed via Replit Secrets Manager: `DATABASE_URL`, `ANTHROPIC_API_K
 ### Backend Libraries
 
 -   **Server**: Express.js
+-   **Authentication**: Passport.js, `openid-client`, `express-session`, `connect-pg-simple`
 -   **Database**: Drizzle ORM, `@neondatabase/serverless`, `ws`
 -   **File Upload**: Multer
 -   **Storage**: `@supabase/supabase-js`
