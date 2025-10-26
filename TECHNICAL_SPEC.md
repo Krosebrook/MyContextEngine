@@ -897,7 +897,24 @@ npm run dev
 | `npm run check` | TypeScript type checking | Pre-commit |
 | `npm run db:push` | Sync database schema | After schema changes |
 
-### End-to-End Flow (Upload → KB)
+### End-to-End Flow
+
+**User Experience** (What you actually see):
+
+```
+Step 1: Drop a file → Upload progress bar appears
+Step 2: Wait ~10 seconds → Animated progress shows AI analysis
+Step 3: Done! → Find it in Knowledge Base with smart tags
+```
+
+**Typical Duration**: 5-12 seconds (text files), 10-20 seconds (complex files)
+
+---
+
+<details>
+<summary><b>Technical Implementation Details</b> (Click to expand)</summary>
+
+**Full System Flow** (20 steps - for developers):
 
 ```
 1.  User uploads file.pdf → POST /api/files/upload
@@ -929,7 +946,14 @@ npm run dev
 21. User sees analyzed content in Knowledge Base
 ```
 
-**Typical Duration**: 5-12 seconds (text files), 10-20 seconds (complex files)
+**Why 20 steps feels like 3**:
+- Steps 1-6: Happen instantly (< 1 second)
+- Steps 7-19: Hidden behind progress bars and animations
+- Step 20-21: Auto-refresh, user doesn't need to navigate
+
+The system is designed to feel **magical and instant** while maintaining robust background processing.
+
+</details>
 
 ---
 

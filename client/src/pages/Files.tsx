@@ -3,10 +3,10 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Upload, File, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Upload, File, Loader2, CheckCircle2, XCircle, Sparkles } from "lucide-react";
 import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { StatusBadge } from "@/components/StatusBadge";
+import { FileProcessingProgress } from "@/components/FileProcessingProgress";
 
 interface FileRecord {
   id: string;
@@ -42,9 +42,16 @@ export default function Files() {
     },
     onSuccess: (_, file) => {
       queryClient.invalidateQueries({ queryKey: ["/api/files"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/kb"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
       setUploadQueue(prev => prev.map(item => 
         item.file === file ? { ...item, status: 'success' } : item
       ));
+      
+      toast({
+        title: "File uploaded successfully",
+        description: `${file.name} is being analyzed by AI. Check the Knowledge Base in ~10 seconds.`,
+      });
     },
     onError: (error: any, file) => {
       setUploadQueue(prev => prev.map(item => 
@@ -209,9 +216,33 @@ export default function Files() {
         </Card>
       )}
 
+      {/* Processing Files */}
+      {files.filter(f => f.status !== "analyzed").length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              Processing Files ({files.filter(f => f.status !== "analyzed").length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {files
+              .filter(f => f.status !== "analyzed")
+              .map((file) => (
+                <FileProcessingProgress
+                  key={file.id}
+                  status={file.status as "uploaded" | "pending" | "extracted" | "analyzed"}
+                  fileName={file.originalName}
+                />
+              ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* All Files Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Uploaded Files ({files.length})</CardTitle>
+          <CardTitle>All Files ({files.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (

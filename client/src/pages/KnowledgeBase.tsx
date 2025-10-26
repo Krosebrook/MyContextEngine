@@ -10,9 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, FileText, Loader2, Download, ArrowUpDown } from "lucide-react";
+import { Search, FileText, Loader2, Download, ArrowUpDown, Sparkles } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface KbEntry {
   id: string;
@@ -146,79 +147,131 @@ export default function KnowledgeBase() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : filteredAndSortedEntries.length === 0 ? (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center text-muted-foreground">
-              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">No entries found</p>
-              <p className="text-sm mt-1">
-                Upload some files to build your knowledge base
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredAndSortedEntries.map((entry) => (
-            <Card
-              key={entry.id}
-              className="hover-elevate"
-              data-testid={`kb-entry-${entry.id}`}
-            >
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Card key={i} className="animate-pulse">
               <CardHeader>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <CardTitle className="text-base line-clamp-2">{entry.title}</CardTitle>
-                  <Badge variant="outline" className={getCategoryColor(entry.category)}>
-                    {entry.category}
-                  </Badge>
-                </div>
+                <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
+                <div className="h-6 bg-muted rounded w-20"></div>
               </CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground line-clamp-3">
-                  {entry.summary}
-                </p>
-                
-                {entry.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {entry.tags.slice(0, 3).map((tag, idx) => (
-                      <Badge key={idx} variant="secondary" className="text-xs">
-                        {tag}
-                      </Badge>
-                    ))}
-                    {entry.tags.length > 3 && (
-                      <Badge variant="secondary" className="text-xs">
-                        +{entry.tags.length - 3}
-                      </Badge>
-                    )}
-                  </div>
-                )}
-
-                <div className="pt-2 border-t flex items-center justify-between gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(entry.createdAt).toLocaleDateString()}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => downloadMutation.mutate(entry.fileId)}
-                    disabled={downloadMutation.isPending}
-                    data-testid={`button-download-${entry.id}`}
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
+                <div className="space-y-2">
+                  <div className="h-3 bg-muted rounded"></div>
+                  <div className="h-3 bg-muted rounded w-5/6"></div>
+                </div>
+                <div className="flex gap-1">
+                  <div className="h-6 bg-muted rounded w-16"></div>
+                  <div className="h-6 bg-muted rounded w-16"></div>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
+      ) : filteredAndSortedEntries.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Card>
+            <CardContent className="py-12">
+              <div className="text-center text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium">No entries found</p>
+                <p className="text-sm mt-1">
+                  Upload some files to build your knowledge base
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      ) : (
+        <motion.div
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+          initial="hidden"
+          animate="visible"
+          variants={{
+            visible: {
+              transition: {
+                staggerChildren: 0.05,
+              },
+            },
+          }}
+        >
+          <AnimatePresence mode="popLayout">
+            {filteredAndSortedEntries.map((entry, index) => (
+              <motion.div
+                key={entry.id}
+                layout
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{
+                  duration: 0.3,
+                  delay: index * 0.05,
+                  layout: { duration: 0.3 },
+                }}
+                whileHover={{ y: -4, transition: { duration: 0.2 } }}
+              >
+                <Card
+                  className="hover-elevate h-full"
+                  data-testid={`kb-entry-${entry.id}`}
+                >
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <CardTitle className="text-base line-clamp-2 flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-primary flex-shrink-0" />
+                        <span>{entry.title}</span>
+                      </CardTitle>
+                      <Badge variant="outline" className={getCategoryColor(entry.category)}>
+                        {entry.category}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {entry.summary}
+                    </p>
+                    
+                    {entry.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {entry.tags.slice(0, 3).map((tag, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {entry.tags.length > 3 && (
+                          <Badge variant="secondary" className="text-xs">
+                            +{entry.tags.length - 3}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="pt-2 border-t flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(entry.createdAt).toLocaleDateString()}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => downloadMutation.mutate(entry.fileId)}
+                        disabled={downloadMutation.isPending}
+                        data-testid={`button-download-${entry.id}`}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
       )}
 
       <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <span>Showing {filteredEntries.length} of {entries.length} entries</span>
+        <span>Showing {filteredAndSortedEntries.length} of {entries.length} entries</span>
       </div>
     </div>
   );

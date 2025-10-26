@@ -28,6 +28,7 @@ export interface Job {
   finishedAt?: string;
   attempts: number;
   maxAttempts: number;
+  error?: string;
 }
 
 interface JobsTableProps {

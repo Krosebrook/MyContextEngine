@@ -8,10 +8,9 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
-import JobsRealtime from "@/pages/JobsRealtime";
+import SystemMonitor from "@/pages/SystemMonitor";
 import Files from "@/pages/Files";
 import KnowledgeBase from "@/pages/KnowledgeBase";
-import Monitoring from "@/pages/Monitoring";
 import Scanner from "@/pages/Scanner";
 
 function Router() {
@@ -20,9 +19,8 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/files" component={Files} />
       <Route path="/kb" component={KnowledgeBase} />
-      <Route path="/jobs" component={JobsRealtime} />
+      <Route path="/jobs" component={SystemMonitor} />
       <Route path="/scanner" component={Scanner} />
-      <Route path="/monitoring" component={Monitoring} />
       <Route component={NotFound} />
     </Switch>
   );
