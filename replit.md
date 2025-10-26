@@ -86,3 +86,85 @@ Secrets are managed via Replit Secrets Manager: `DATABASE_URL`, `ANTHROPIC_API_K
 -   **Storage**: `@supabase/supabase-js`
 -   **Validation**: Zod
 -   **Build Tools**: esbuild, `tsx`
+
+---
+
+## Documentation Framework
+
+This project uses a **hybrid PEPO + Replit documentation approach** that balances structured decision-making with lightweight overhead, optimized for small teams and active development.
+
+### 📚 Documentation Index
+
+#### Architecture Decision Records (ADRs)
+**Location**: [`docs/architecture-decisions.md`](./docs/architecture-decisions.md)
+
+Documents major architectural choices with rationale, consequences, and metrics:
+- **ADR-001**: Dual Database Architecture (Neon + Supabase)
+- **ADR-002**: Multi-Provider AI Strategy (Gemini, Claude, OpenAI)
+- **ADR-003**: Scanner Security Model (Whitelist validation)
+- **ADR-004**: Job Processing Pipeline (Dispatcher + Processor)
+- **ADR-005**: Multi-Tenant Architecture (Application-layer isolation)
+- **ADR-006**: Authentication & Authorization Strategy (Deferred implementation)
+
+#### Quality & Metrics
+**Location**: [`docs/quality-metrics-baseline.md`](./docs/quality-metrics-baseline.md)
+
+Tracks system-wide and feature-level quality scores, performance benchmarks, and cost efficiency:
+- Overall system quality: **Q = 0.87** (estimated, pending automated testing)
+- Feature breakdowns (Upload: 0.92, AI Analysis: 0.88, Scanner: 0.89, Search: 0.82)
+- Performance metrics, reliability targets, security posture
+- **Note**: Current scores are manual estimates until instrumentation is added
+
+#### Templates for Consistency
+**Location**: `docs/templates/`
+
+Reusable formats for consistent documentation:
+- **RCA Template**: Root cause analysis for incidents
+- **Gap Analysis Template**: Production readiness assessments
+- **Quality Scoring**: Metrics calculation framework
+
+#### Scaling & Evolution Guide
+**Location**: [`docs/scaling-evolution-guide.md`](./docs/scaling-evolution-guide.md) ⭐
+
+**Critical for future growth** - Maps current lightweight approach to enterprise-grade LLM-SARP v2.7:
+- **When to upgrade**: Trigger conditions (team size, compliance needs, incidents)
+- **Migration paths**: Incremental vs. big bang approaches
+- **Feature-by-feature adoption**: Schema registry, OTel, auto-healing, FinOps, compliance
+- **Cost-benefit analysis**: ROI calculations for each v2.7 feature
+- **Decision tree**: Should you upgrade? (spoiler: not yet, but guide is ready)
+
+#### Reference Specifications
+**Location**: `docs/references/`
+
+- **LLM-SARP v2.7 Spec**: Full specification for enterprise-grade documentation framework
+
+### 🎯 Current Approach vs. Future State
+
+| Aspect | Current (Hybrid) | Future (LLM-SARP v2.7) | When to Upgrade |
+|--------|------------------|------------------------|-----------------|
+| **Format** | Markdown ADRs | JSON Schema-validated | Team ≥5 people |
+| **Quality Tracking** | Manual estimates | Automated telemetry | Production launch |
+| **Validation** | None | CI gates + pre-commit | Documentation drift |
+| **Compliance** | Not required | NIST/OWASP mapping | Enterprise sales |
+| **Auto-Healing** | Manual response | Triggered rollbacks | Incidents >2/month |
+
+**Philosophy**: Start lightweight, scale intentionally. The [`scaling-evolution-guide.md`](./docs/scaling-evolution-guide.md) provides the upgrade path when you need it.
+
+### 📅 Governance & Maintenance
+
+**Review Cadence**:
+- **Monthly**: Update quality metrics baseline with new measurements
+- **Quarterly**: Review ADRs, update statuses, deprecate outdated decisions
+- **After major features**: Create new ADRs for significant architectural changes
+- **After incidents**: Generate RCA documents using template
+
+**Next Scheduled Reviews**:
+- Quality metrics: 2024-11-25 (monthly)
+- ADR review: 2025-01-26 (quarterly)
+- Scaling assessment: When team ≥5 people OR compliance required
+
+**Keeping Documentation Current**:
+1. After adding automated tests → Update quality scores with real data
+2. After major releases → Refresh gap analysis for production readiness
+3. When assumptions change → Revisit relevant ADRs
+4. Before fundraising/audits → Consider adopting relevant v2.7 features (see scaling guide)
