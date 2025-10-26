@@ -2,7 +2,9 @@
 
 ## Overview
 
-This project is an AI-powered knowledge management system designed for organizing diverse file types (PDFs, images, documents, code, zips) into structured, searchable knowledge bases. It leverages multi-provider AI (Gemini, Claude, OpenAI GPT-4o-mini) to analyze, categorize, tag, and summarize content, enabling intelligent file organization. The system features a robust job processing pipeline with background workers for text extraction and AI-driven metadata generation. All data resides in a multi-tenant PostgreSQL database, offering real-time UI updates and local drive scanning capabilities. The business vision is to provide a seamless, intelligent platform for personal and potentially collaborative knowledge management, addressing the growing need for efficient information retrieval and organization.
+This project is an AI-powered knowledge management system designed for organizing diverse file types (PDFs, images, documents, code, zips) into structured, searchable knowledge bases. It leverages multi-provider AI (Gemini, Claude, OpenAI GPT-4o-mini) to analyze, categorize, tag, and summarize content, enabling intelligent file organization. The system features a robust job processing pipeline with background workers for text extraction and AI-driven metadata generation. All data resides in a multi-tenant PostgreSQL database, offering real-time UI updates and local drive scanning capabilities.
+
+**User Experience Philosophy**: The system is designed to feel magical and instant, transforming a complex 20-step technical process into a simple 3-step experience: (1) Drop a file, (2) Wait ~10 seconds with animated progress, (3) Find it in Knowledge Base with smart tags. All complexity is hidden behind professional animations, auto-refresh mechanisms, and intelligent defaults.
 
 ## User Preferences
 
@@ -14,11 +16,15 @@ Preferred communication style: Simple, everyday language.
 
 The frontend is built with React and TypeScript, utilizing Vite for development and bundling. It employs `wouter` for client-side routing and `shadcn/ui` (built on Radix UI primitives) for components, styled with Tailwind CSS. The design adheres to Carbon Design System principles from IBM, emphasizing information hierarchy, clarity, and density for enterprise data applications, featuring IBM Plex Sans typography. Styling uses a custom color system with HSL variables for theming, supporting light/dark modes. State management is handled by TanStack Query for server state.
 
+**Animation & Polish**: All animations respect `prefers-reduced-motion` for accessibility. Framer Motion powers stagger effects (50ms delay between KB grid entries), hover elevations, smooth page transitions, and loading skeletons. No spinners used—loading states use skeleton screens for professional polish.
+
+**Auto-Refresh Architecture**: Upload success triggers automatic query invalidation for KB, files, and statistics queries. Users never need to manually refresh—the UI updates seamlessly within ~10 seconds of upload completion. Success toasts guide users to the Knowledge Base without requiring navigation.
+
 Key pages include:
-- **Dashboard**: Overview of metrics and recent jobs.
-- **Files**: Drag-and-drop upload interface with real-time progress.
-- **Knowledge Base**: Grid view of AI-analyzed content with search, filters, sorting, and download options.
-- **Jobs**: Listing of job statuses with actions and auto-refresh.
+- **Dashboard**: Overview of metrics and recent jobs (not yet implemented).
+- **Files**: Drag-and-drop upload interface with animated 3-stage progress indicators (Upload → Extract → Analyze), real-time status cards, and auto-refresh on completion.
+- **Knowledge Base**: Grid view of AI-analyzed content with stagger animations, sparkle icons, search filters, sorting, and download options. Uses loading skeletons instead of spinners.
+- **System Monitor** (formerly Jobs): Analytics-first dashboard with real-time metrics (success rate, throughput, bottlenecks), AI provider performance tracking, failure pattern analysis, and gap identification. Auto-refreshes every 5 seconds.
 - **Scanner**: Local drive scanning with security features and batch import.
 
 ### Technical Implementations
