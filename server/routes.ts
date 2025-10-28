@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { generalLimiter, uploadLimiter, aiLimiter, scannerLimiter } from "./rateLimiter";
 import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -38,7 +39,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
   // Auth endpoint - returns current user info
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  app.get('/api/auth/user', generalLimiter, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
@@ -50,7 +51,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // File upload endpoint (protected)
-  app.post("/api/files/upload", isAuthenticated, upload.single("file"), async (req, res) => {
+  app.post("/api/files/upload", uploadLimiter, isAuthenticated, upload.single("file"), async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       
@@ -90,7 +91,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // List files (protected)
-  app.get("/api/files", isAuthenticated, async (req, res) => {
+  app.get("/api/files", generalLimiter, isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const files = await storage.listFiles(tenantId);
@@ -101,7 +102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get single file (protected)
-  app.get("/api/files/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/files/:id", generalLimiter, isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const file = await storage.getFile(tenantId, req.params.id);
@@ -115,7 +116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // List jobs (protected)
-  app.get("/api/jobs", isAuthenticated, async (req, res) => {
+  app.get("/api/jobs", generalLimiter, isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const status = req.query.status as string | undefined;
@@ -127,7 +128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get single job (protected)
-  app.get("/api/jobs/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/jobs/:id", generalLimiter, isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const job = await storage.getJob(tenantId, req.params.id);
@@ -141,7 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Retry job (protected)
-  app.post("/api/jobs/:id/retry", isAuthenticated, async (req, res) => {
+  app.post("/api/jobs/:id/retry", aiLimiter, isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const job = await storage.getJob(tenantId, req.params.id);
@@ -158,7 +159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Cancel job (protected)
-  app.post("/api/jobs/:id/cancel", isAuthenticated, async (req, res) => {
+  app.post("/api/jobs/:id/cancel", generalLimiter, isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const job = await storage.getJob(tenantId, req.params.id);
@@ -175,7 +176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // List KB entries (protected)
-  app.get("/api/kb", isAuthenticated, async (req, res) => {
+  app.get("/api/kb", generalLimiter, isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const category = req.query.category as string | undefined;
@@ -195,7 +196,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Download file with signed URL (protected)
-  app.get("/api/files/:id/download", isAuthenticated, async (req, res) => {
+  app.get("/api/files/:id/download", generalLimiter, isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const file = await storage.getFile(tenantId, req.params.id);
@@ -217,7 +218,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Dashboard stats (protected)
-  app.get("/api/stats", isAuthenticated, async (req, res) => {
+  app.get("/api/stats", generalLimiter, isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const files = await storage.listFiles(tenantId);
@@ -241,7 +242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Scan local directory (protected)
-  app.post("/api/scanner/scan", isAuthenticated, async (req, res) => {
+  app.post("/api/scanner/scan", scannerLimiter, isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const { path } = req.body;
@@ -328,7 +329,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Import scanned files (protected)
-  app.post("/api/scanner/import", isAuthenticated, async (req, res) => {
+  app.post("/api/scanner/import", uploadLimiter, isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const { files } = req.body;
