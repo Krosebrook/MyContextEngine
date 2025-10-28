@@ -66,7 +66,7 @@ function Router() {
   );
 }
 
-export default function App() {
+function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
   const style = {
     "--sidebar-width": "16rem",
@@ -77,47 +77,56 @@ export default function App() {
     window.location.href = "/api/logout";
   };
 
+  // Show landing page without sidebar/header
+  if (isLoading || !isAuthenticated) {
+    return (
+      <>
+        <Router />
+        <Toaster />
+      </>
+    );
+  }
+
+  // Show authenticated app with sidebar
+  return (
+    <SidebarProvider style={style as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <AppSidebar />
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <header className="flex items-center justify-between px-6 py-3 border-b border-border bg-background">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+            </div>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                data-testid="button-logout"
+                title="Log out"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          </header>
+          <main className="flex-1 overflow-auto">
+            <div className="max-w-7xl mx-auto p-6">
+              <Router />
+            </div>
+          </main>
+        </div>
+      </div>
+      <Toaster />
+    </SidebarProvider>
+  );
+}
+
+export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        {/* Show landing page without sidebar/header */}
-        {isLoading || !isAuthenticated ? (
-          <>
-            <Router />
-            <Toaster />
-          </>
-        ) : (
-          <SidebarProvider style={style as React.CSSProperties}>
-            <div className="flex h-screen w-full">
-              <AppSidebar />
-              <div className="flex flex-col flex-1 overflow-hidden">
-                <header className="flex items-center justify-between px-6 py-3 border-b border-border bg-background">
-                  <div className="flex items-center gap-2">
-                    <SidebarTrigger data-testid="button-sidebar-toggle" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <ThemeToggle />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleLogout}
-                      data-testid="button-logout"
-                      title="Log out"
-                    >
-                      <LogOut className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </header>
-                <main className="flex-1 overflow-auto">
-                  <div className="max-w-7xl mx-auto p-6">
-                    <Router />
-                  </div>
-                </main>
-              </div>
-            </div>
-            <Toaster />
-          </SidebarProvider>
-        )}
+        <AppContent />
       </TooltipProvider>
     </QueryClientProvider>
   );
