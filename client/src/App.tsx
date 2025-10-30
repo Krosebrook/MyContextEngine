@@ -10,6 +10,9 @@ import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { InstallPrompt } from "@/components/InstallPrompt";
+import { registerServiceWorker } from "@/lib/pwa";
+import { useEffect } from "react";
 import Landing from "@/pages/Landing";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
@@ -123,10 +126,16 @@ function AppContent() {
 }
 
 export default function App() {
+  useEffect(() => {
+    // Register service worker for PWA functionality
+    registerServiceWorker();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AppContent />
+        <InstallPrompt />
       </TooltipProvider>
     </QueryClientProvider>
   );
