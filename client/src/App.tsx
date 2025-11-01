@@ -17,6 +17,8 @@ import Landing from "@/pages/Landing";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import SystemMonitor from "@/pages/SystemMonitor";
+import Monitoring from "@/pages/Monitoring";
+import Settings from "@/pages/Settings";
 import Files from "@/pages/Files";
 import KnowledgeBase from "@/pages/KnowledgeBase";
 import Scanner from "@/pages/Scanner";
@@ -62,6 +64,16 @@ function Router() {
       <Route path="/scanner">
         <ErrorBoundary fallbackTitle="Scanner Error" fallbackMessage="The scanner encountered an issue. Try refreshing.">
           <Scanner />
+        </ErrorBoundary>
+      </Route>
+      <Route path="/monitoring">
+        <ErrorBoundary fallbackTitle="Monitoring Error" fallbackMessage="The monitoring page encountered an issue. Try refreshing.">
+          <Monitoring />
+        </ErrorBoundary>
+      </Route>
+      <Route path="/settings">
+        <ErrorBoundary fallbackTitle="Settings Error" fallbackMessage="The settings page encountered an issue. Try refreshing.">
+          <Settings />
         </ErrorBoundary>
       </Route>
       <Route component={NotFound} />
