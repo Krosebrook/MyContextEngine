@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { HardDrive, Loader2, FolderOpen, FileText, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { withRetry } from "@/lib/retryLogic";
 
 interface ScannedFile {
   path: string;
@@ -24,11 +25,14 @@ export default function Scanner() {
   const { toast } = useToast();
 
   const scanMutation = useMutation({
-    mutationFn: async ({ path, depth }: { path: string; depth: number }) => {
-      const response = await apiRequest("POST", "/api/scanner/scan", { path, depth });
-      return response.json();
-    },
-    onSuccess: (data) => {
+    mutationFn: withRetry(
+      async ({ path, depth }: { path: string; depth: number }) => {
+        const response = await apiRequest("POST", "/api/scanner/scan", { path, depth });
+        return response.json();
+      },
+      { maxRetries: 3, baseDelay: 2000, maxDelay: 60000 }
+    ),
+    onSuccess: (data: any) => {
       setScannedFiles(data.files || []);
       setSelectedFiles(new Set());
       toast({
@@ -46,11 +50,14 @@ export default function Scanner() {
   });
 
   const importMutation = useMutation({
-    mutationFn: async (files: string[]) => {
-      const response = await apiRequest("POST", "/api/scanner/import", { files });
-      return response.json();
-    },
-    onSuccess: (data) => {
+    mutationFn: withRetry(
+      async (files: string[]) => {
+        const response = await apiRequest("POST", "/api/scanner/import", { files });
+        return response.json();
+      },
+      { maxRetries: 3, baseDelay: 2000, maxDelay: 60000 }
+    ),
+    onSuccess: (data: any) => {
       toast({
         title: "Import successful",
         description: `Imported ${data.imported} files for processing`,
