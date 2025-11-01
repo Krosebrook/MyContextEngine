@@ -1,0 +1,86 @@
+You are a senior Staff+ full-stack engineer, product strategist, and UX lead. Analyze and produce a complete roadmap and specification for a web app called **File Organizer (AI-Powered KB)** with these current UI areas and problems (from screenshots):
+
+- Main nav: Dashboard, Files, Knowledge Base, Jobs, Drive Scanner
+- System section: Monitoring, Settings
+- Observed issues:
+  1) Drive Scanner shows: `Scan failed: 429 {"error":"Too many requests", "retryAfter":"3286"}`
+  2) Clicking Monitoring/Settings sometimes reveals a `404 Page Not Found – Did you forget to add the page to the router?`
+  3) Files page shows “Processing Files (1)” stuck (e.g., `README.md`), bottom spinner and progress bar don’t complete; Jobs show queue size 1 but no workers consume.
+  4) Local Drive Scanner field (e.g., `D:/`) has no scan depth options and doesn’t enumerate files.
+
+## Goal
+Produce a precise, production-grade plan and artifacts to:
+1) Ship a working MVP that ingests local/remote files, extracts text/metadata, builds a search-optimized knowledge base, and exposes RAG APIs.
+2) Fix the 404 routing, 429 rate-limiting, and stuck pipeline.
+3) Define all **functional** and **non-functional** requirements, user flows, system architecture, and operational runbooks.
+
+## Output Format (strict)
+1) **Executive Brief (bulleted, ≤12 bullets)**
+2) **Functional Requirements** (FR-# …) and **Non-Functional Requirements** (NFR-# …)
+3) **User Personas & Top Tasks**
+4) **End-to-End User Flows** (numbered), each with: triggers, success path, alt paths, edge cases
+5) **Information Architecture & Routing Map**
+   - Provide a full route table for a modern SPA (e.g., Next.js/React Router), including Monitoring and Settings
+6) **System Architecture**
+   - Sequence diagram (Mermaid) for: upload → text extraction → chunking → embedding → KB index → search/RAG
+   - Component diagram (Mermaid)
+   - Queue/worker model (Mermaid), including idempotency, retries, DLQ
+7) **Data Models (ERD + schemas)**
+   - Files, Batches, Jobs, Chunks, Embeddings, KB Entries, Connectors, Tenants/Users, RateLimit, AuditLog
+   - Provide DDL (Postgres) with indexes and constraints; include `pgvector` for embeddings
+8) **API Contracts**
+   - REST (OpenAPI YAML) for: upload, scan request, job status, KB search, admin/monitoring, settings
+   - WebSocket events for job progress
+9) **Drive Scanner Design**
+   - Local agent bridge vs. web sandbox limitations
+   - Directory depth options, file filters, batching, backpressure, resumable scans
+   - Rate-limit-aware scheduler (token bucket + exponential backoff honoring `Retry-After`)
+10) **Routing Fix Plan**
+    - Exact steps to register Monitoring/Settings routes, lazy loading, 404/500 boundaries, auth guards
+11) **Ingestion Pipeline Fix Plan**
+    - Worker bootstrap, concurrency controls, visibility timeouts, stuck job detector, requeue rules, DLQ and replay
+12) **Observability & Ops**
+    - Metrics (queues, throughput, latency, 429s), logs, traces; dashboard widgets; alert thresholds
+13) **Security/Compliance**
+    - Multi-tenant isolation, RLS (if Supabase/Postgres), secret handling, file sandboxing, AV scan, PII redaction
+14) **Performance Budget**
+    - Targets for P95 ingest latency, QPS, memory/CPU bounds; indexing throughput targets (docs/min)
+15) **Testing Strategy**
+    - Unit, contract, integration, e2e; seed fixtures; golden prompts for RAG evaluation; CI gates and flake management
+16) **Backlog & Roadmap**
+    - **MVP (2 weeks)**, **Phase 2 (4–6 weeks)**, **Phase 3 (2–3 months)**
+    - Each item: scope, acceptance criteria, risks, owner role
+17) **Fix-It Tickets (ready to paste in issue tracker)**
+    - “404 route registration”, “429 backoff middleware”, “Worker not consuming”, etc. Include DoD and repro steps.
+18) **Copy-Paste Artifacts**
+    - a) `router.tsx` (React Router or Next.js app routes) with Monitoring/Settings routes wired
+    - b) `openapi.yaml` (complete, minimal)
+    - c) `schema.sql` (DDL with indexes)
+    - d) `queue.ts` (BullMQ/RQ/Celery-like abstraction: enqueue, idempotency, backoff, Retry-After honoring)
+    - e) `worker.ts` (safe concurrency, heartbeats, DLQ, metrics)
+    - f) `ingest.pipeline.ts` (upload → extract → chunk → embed → index)
+    - g) `rateLimit.ts` (token bucket + jittered exponential backoff; parse `Retry-After`)
+    - h) `monitoring.ts` (Prometheus metrics; counters for 429s, queue_depth, job_failures; health endpoint)
+    - i) `mermaid.md` with all diagrams
+19) **Acceptance Criteria Checklist** (go/no-go)
+20) **Risk Register** (top 10 with mitigations)
+
+## Hard Requirements & Assumptions
+- Stack: TypeScript, React (or Next.js), Node.js backend, Postgres + `pgvector`, Redis for queue, OpenAPI for REST, WebSocket/SSE for progress.
+- All scan/ingest actions must be **rate-limit safe**. Backoff rules:
+  - On 429, read `Retry-After` (seconds or date); pause the job; reschedule.
+  - Otherwise use jittered exponential backoff: base 1s, factor 2, max 5m, full jitter.
+  - Include a token-bucket limiter (defaults: 10 RPS, burst 20) per connector/key and per IP.
+- Local Drive Scans require a **desktop agent** or Electron app to enumerate `C:/` or `D:/`; web cannot read local FS recursively. Provide both: (1) agent plan, (2) Electron plan, (3) docs-only fallback.
+- Jobs must be **idempotent**; use content hash (SHA-256) keys for files/chunks; store `ingest_attempts`.
+- Worker must heartbeat; controller marks a job “stuck” if no heartbeat for 2×visibilityTimeout; then requeue or DLQ.
+- Add **router coverage** for Monitoring and Settings; include error boundaries and 404 fallbacks.
+- Provide **UX microcopy** for empty states and progress bars (uploading, extracting text, embedding, indexing).
+- Include **Mermaid** diagrams and copy-pastable code snippets for critical modules.
+- Output must be **complete** and directly actionable—no placeholders.
+
+## Deliverable Quality Bar
+- Be exhaustive, specific, and production-minded.
+- Prefer concrete code/config over prose where useful.
+- All lists should be numbered and checkable.
+- No speculation beyond the stated assumptions; call out uncertainties explicitly.
