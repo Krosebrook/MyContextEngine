@@ -245,10 +245,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/scanner/scan", scannerLimiter, isAuthenticated, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
-      const { path } = req.body;
+      const { path, depth = 3 } = req.body;
       if (!path) {
         return res.status(400).json({ error: "Path is required" });
       }
+      
+      // Validate and clamp depth to safe range
+      const maxDepth = Math.min(Math.max(1, parseInt(depth) || 3), 5);
 
       const pathModule = await import("path");
       const os = await import("os");
@@ -284,8 +287,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const fs = await import("fs/promises");
       
-      const scanDir = async (dirPath: string, depth = 0): Promise<any[]> => {
-        if (depth > 3) return [];
+      const scanDir = async (dirPath: string, currentDepth = 0): Promise<any[]> => {
+        if (currentDepth >= maxDepth) return [];
         
         try {
           const entries = await fs.readdir(dirPath, { withFileTypes: true });
@@ -296,7 +299,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             if (entry.isDirectory()) {
               if (!entry.name.startsWith('.') && entry.name !== 'node_modules') {
-                const subFiles = await scanDir(fullPath, depth + 1);
+                const subFiles = await scanDir(fullPath, currentDepth + 1);
                 results.push(...subFiles);
               }
             } else if (entry.isFile()) {

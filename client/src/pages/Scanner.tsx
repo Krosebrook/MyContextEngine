@@ -18,13 +18,14 @@ interface ScannedFile {
 
 export default function Scanner() {
   const [scanPath, setScanPath] = useState("C:/");
+  const [scanDepth, setScanDepth] = useState(3);
   const [scannedFiles, setScannedFiles] = useState<ScannedFile[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   const scanMutation = useMutation({
-    mutationFn: async (path: string) => {
-      const response = await apiRequest("POST", "/api/scanner/scan", { path });
+    mutationFn: async ({ path, depth }: { path: string; depth: number }) => {
+      const response = await apiRequest("POST", "/api/scanner/scan", { path, depth });
       return response.json();
     },
     onSuccess: (data) => {
@@ -115,7 +116,7 @@ export default function Scanner() {
               data-testid="input-scan-path"
             />
             <Button
-              onClick={() => scanMutation.mutate(scanPath)}
+              onClick={() => scanMutation.mutate({ path: scanPath, depth: scanDepth })}
               disabled={scanMutation.isPending || !scanPath}
               data-testid="button-start-scan"
             >
@@ -133,31 +134,54 @@ export default function Scanner() {
             </Button>
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setScanPath("C:/")}
-              data-testid="button-preset-c"
-            >
-              C: Drive
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setScanPath("D:/")}
-              data-testid="button-preset-d"
-            >
-              D: Drive
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setScanPath(process.env.HOME || "/home")}
-              data-testid="button-preset-home"
-            >
-              Home Directory
-            </Button>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Scan Depth</label>
+              <div className="flex items-center gap-4">
+                <input
+                  type="range"
+                  min="1"
+                  max="5"
+                  value={scanDepth}
+                  onChange={(e) => setScanDepth(parseInt(e.target.value))}
+                  className="flex-1"
+                  data-testid="slider-scan-depth"
+                />
+                <Badge variant="outline" className="w-16 justify-center" data-testid="badge-depth-value">
+                  {scanDepth} level{scanDepth !== 1 ? 's' : ''}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                How many subdirectory levels to scan (1-5)
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setScanPath("C:/")}
+                data-testid="button-preset-c"
+              >
+                C: Drive
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setScanPath("D:/")}
+                data-testid="button-preset-d"
+              >
+                D: Drive
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setScanPath(process.env.HOME || "/home")}
+                data-testid="button-preset-home"
+              >
+                Home Directory
+              </Button>
+            </div>
           </div>
 
           {scanMutation.isPending && (
