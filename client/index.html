@@ -3,26 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>AI Knowledge Manager - Organize Files with AI</title>
-    <meta name="description" content="AI-powered file organization and knowledge management. Upload files, get instant AI analysis, tags, and smart categorization. Works offline." />
+    <title>FlashFusion - AI-Powered Knowledge Management</title>
+    <meta name="description" content="Transform chaos into clarity. FlashFusion uses AI to automatically organize, tag, and analyze your files in seconds. Upload anything, find everything." />
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
     
-    <!-- Theme Colors -->
-    <meta name="theme-color" content="#0F62FE" />
+    <!-- Theme Colors - FlashFusion Electric Indigo -->
+    <meta name="theme-color" content="#4845F5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#6865F7" media="(prefers-color-scheme: dark)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Knowledge AI" />
+    <meta name="apple-mobile-web-app-title" content="FlashFusion" />
     
     <!-- Icons -->
     <link rel="icon" type="image/png" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/icon-512.png" />
     
-    <!-- Fonts -->
+    <!-- Font Preconnects for Performance -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=IBM+Plex+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap" rel="stylesheet">
+    
+    <!-- Preload Critical Fonts (Inter Regular + Medium) -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+    
+    <!-- Load Fonts with display=swap for Performance -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
   </head>
   <body>
     <div id="root"></div>

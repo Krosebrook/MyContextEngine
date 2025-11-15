@@ -5,6 +5,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Accessibility: Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    animation-delay: 0s !important;
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition: none !important;
+    transition-delay: 0s !important;
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0,0,0, .10);
@@ -260,6 +276,30 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+  }
+
+  /* Accessibility: Enhanced focus indicators - High specificity to override component styles */
+  :where(*):focus-visible {
+    outline: 2px solid hsl(var(--primary)) !important;
+    outline-offset: 2px !important;
+  }
+  
+  /* Extra emphasis for buttons and interactive controls */
+  :where(button, a, input, textarea, select, [role="button"], [tabindex]):focus-visible {
+    outline: 3px solid hsl(var(--primary)) !important;
+    outline-offset: 2px !important;
+    box-shadow: 0 0 0 4px hsl(var(--primary) / 0.2) !important;
+  }
+
+  /* Accessibility: Skip to main content link */
+  .skip-to-main {
+    @apply fixed top-2 left-2 z-[9999] bg-primary text-primary-foreground px-4 py-2 rounded-md font-medium shadow-lg;
+    transform: translateY(-200%);
+    transition: transform 0.2s ease-in-out;
+  }
+
+  .skip-to-main:focus {
+    transform: translateY(0);
   }
 }
 
