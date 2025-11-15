@@ -6,6 +6,8 @@ This project is an AI-powered knowledge management system designed for organizin
 
 **User Experience Philosophy**: The system is designed to feel magical and instant, transforming a complex 20-step technical process into a simple 3-step experience: (1) Drop a file, (2) Wait ~10 seconds with animated progress, (3) Find it in Knowledge Base with smart tags. All complexity is hidden behind professional animations, auto-refresh mechanisms, and intelligent defaults.
 
+**Performance & Accessibility**: FlashFusion implements WCAG 2.2 AA compliance with enhanced focus indicators, skip links, reduced-motion support, and semantic HTML. Core Web Vitals are monitored automatically (LCP, INP, CLS, FCP, TTFB) with performance budgets enforced. Code splitting via React.lazy() reduces initial bundle size, font preloading prevents FOIT, and the LazyImage component (IntersectionObserver-based) defers offscreen images.
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.

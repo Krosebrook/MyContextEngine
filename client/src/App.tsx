@@ -12,16 +12,31 @@ import { useAuth } from "@/hooks/useAuth";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { registerServiceWorker } from "@/lib/pwa";
-import { useEffect } from "react";
-import Landing from "@/pages/Landing";
-import NotFound from "@/pages/not-found";
-import Dashboard from "@/pages/Dashboard";
-import SystemMonitor from "@/pages/SystemMonitor";
-import Monitoring from "@/pages/Monitoring";
-import Settings from "@/pages/Settings";
-import Files from "@/pages/Files";
-import KnowledgeBase from "@/pages/KnowledgeBase";
-import Scanner from "@/pages/Scanner";
+import { initPerformanceMonitoring } from "@/lib/performance";
+import { useEffect, lazy, Suspense } from "react";
+
+// Lazy load pages for code splitting and better performance
+const Landing = lazy(() => import("@/pages/Landing"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const SystemMonitor = lazy(() => import("@/pages/SystemMonitor"));
+const Monitoring = lazy(() => import("@/pages/Monitoring"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const Files = lazy(() => import("@/pages/Files"));
+const KnowledgeBase = lazy(() => import("@/pages/KnowledgeBase"));
+const Scanner = lazy(() => import("@/pages/Scanner"));
+
+// Loading fallback component
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-screen">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    </div>
+  );
+}
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -35,49 +50,55 @@ function Router() {
 
   // Show landing page if not authenticated
   if (!isAuthenticated) {
-    return <Landing />;
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <Landing />
+      </Suspense>
+    );
   }
 
   // Show main app if authenticated
   return (
-    <Switch>
-      <Route path="/">
-        <ErrorBoundary fallbackTitle="Dashboard Error" fallbackMessage="The dashboard encountered an issue. Try refreshing.">
-          <Dashboard />
-        </ErrorBoundary>
-      </Route>
-      <Route path="/files">
-        <ErrorBoundary fallbackTitle="File Upload Error" fallbackMessage="The file upload page encountered an issue. Try refreshing.">
-          <Files />
-        </ErrorBoundary>
-      </Route>
-      <Route path="/kb">
-        <ErrorBoundary fallbackTitle="Knowledge Base Error" fallbackMessage="The knowledge base encountered an issue. Try refreshing.">
-          <KnowledgeBase />
-        </ErrorBoundary>
-      </Route>
-      <Route path="/jobs">
-        <ErrorBoundary fallbackTitle="System Monitor Error" fallbackMessage="The system monitor encountered an issue. Try refreshing.">
-          <SystemMonitor />
-        </ErrorBoundary>
-      </Route>
-      <Route path="/scanner">
-        <ErrorBoundary fallbackTitle="Scanner Error" fallbackMessage="The scanner encountered an issue. Try refreshing.">
-          <Scanner />
-        </ErrorBoundary>
-      </Route>
-      <Route path="/monitoring">
-        <ErrorBoundary fallbackTitle="Monitoring Error" fallbackMessage="The monitoring page encountered an issue. Try refreshing.">
-          <Monitoring />
-        </ErrorBoundary>
-      </Route>
-      <Route path="/settings">
-        <ErrorBoundary fallbackTitle="Settings Error" fallbackMessage="The settings page encountered an issue. Try refreshing.">
-          <Settings />
-        </ErrorBoundary>
-      </Route>
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<PageLoader />}>
+      <Switch>
+        <Route path="/">
+          <ErrorBoundary fallbackTitle="Dashboard Error" fallbackMessage="The dashboard encountered an issue. Try refreshing.">
+            <Dashboard />
+          </ErrorBoundary>
+        </Route>
+        <Route path="/files">
+          <ErrorBoundary fallbackTitle="File Upload Error" fallbackMessage="The file upload page encountered an issue. Try refreshing.">
+            <Files />
+          </ErrorBoundary>
+        </Route>
+        <Route path="/kb">
+          <ErrorBoundary fallbackTitle="Knowledge Base Error" fallbackMessage="The knowledge base encountered an issue. Try refreshing.">
+            <KnowledgeBase />
+          </ErrorBoundary>
+        </Route>
+        <Route path="/jobs">
+          <ErrorBoundary fallbackTitle="System Monitor Error" fallbackMessage="The system monitor encountered an issue. Try refreshing.">
+            <SystemMonitor />
+          </ErrorBoundary>
+        </Route>
+        <Route path="/scanner">
+          <ErrorBoundary fallbackTitle="Scanner Error" fallbackMessage="The scanner encountered an issue. Try refreshing.">
+            <Scanner />
+          </ErrorBoundary>
+        </Route>
+        <Route path="/monitoring">
+          <ErrorBoundary fallbackTitle="Monitoring Error" fallbackMessage="The monitoring page encountered an issue. Try refreshing.">
+            <Monitoring />
+          </ErrorBoundary>
+        </Route>
+        <Route path="/settings">
+          <ErrorBoundary fallbackTitle="Settings Error" fallbackMessage="The settings page encountered an issue. Try refreshing.">
+            <Settings />
+          </ErrorBoundary>
+        </Route>
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 
@@ -95,10 +116,10 @@ function AppContent() {
   // Show landing page without sidebar/header
   if (isLoading || !isAuthenticated) {
     return (
-      <>
+      <Suspense fallback={<PageLoader />}>
         <Router />
         <Toaster />
-      </>
+      </Suspense>
     );
   }
 
@@ -154,6 +175,9 @@ export default function App() {
   useEffect(() => {
     // Register service worker for PWA functionality
     registerServiceWorker();
+    
+    // Initialize Core Web Vitals monitoring
+    initPerformanceMonitoring();
   }, []);
 
   return (
