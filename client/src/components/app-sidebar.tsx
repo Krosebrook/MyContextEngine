@@ -21,6 +21,9 @@ import {
   HardDrive
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { FlashFusionLogo } from "@/components/FlashFusionLogo";
+import { useAuth } from "@/hooks/useAuth";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const mainItems = [
   {
@@ -65,19 +68,26 @@ const systemItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { user } = useAuth();
+
+  // Get user initials for avatar fallback
+  const getUserInitials = () => {
+    if (!user) return "?";
+    if (user.firstName && user.lastName) {
+      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+    }
+    if (user.email) {
+      return user.email.substring(0, 2).toUpperCase();
+    }
+    return "FF";
+  };
 
   return (
     <Sidebar>
       <SidebarHeader className="p-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-md bg-primary flex items-center justify-center">
-            <BookOpen className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <div>
-            <h2 className="text-lg font-medium">File Organizer</h2>
-            <p className="text-xs text-muted-foreground">AI-Powered KB</p>
-          </div>
-        </div>
+        <a href="/" className="block hover:opacity-80 transition-opacity" data-testid="link-logo">
+          <FlashFusionLogo size="md" variant="full" />
+        </a>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
@@ -125,13 +135,21 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="p-4 border-t border-sidebar-border">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
-            JD
-          </div>
+        <div className="flex items-center gap-3">
+          <Avatar className="h-9 w-9">
+            <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground text-sm font-semibold">
+              {getUserInitials()}
+            </AvatarFallback>
+          </Avatar>
           <div className="flex-1 overflow-hidden">
-            <p className="text-sm font-medium truncate">john@example.com</p>
-            <p className="text-xs text-muted-foreground truncate">Tenant: acme-corp</p>
+            <p className="text-sm font-medium truncate" data-testid="text-user-email">
+              {user?.email || "User"}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              {user?.firstName && user?.lastName 
+                ? `${user.firstName} ${user.lastName}` 
+                : "FlashFusion User"}
+            </p>
           </div>
         </div>
       </SidebarFooter>
