@@ -1,0 +1,285 @@
+Studio-Grade Web App Plan (Brand-Driven, SEO-Optimised)
+
+Below is a complete, implementation-ready blueprint you can hand to design + dev. I’ve assumed Next.js 14 (App Router) + Tailwind + Vercel; adjust stack notes if needed.
+
+1) Sitemap & IA (H-levels + SEO notes)
+
+Core
+
+/ (Home) — H1: Primary value prop; H2s: Benefits, Social proof, CTA.
+
+Add FAQ (accordion with FAQPage JSON-LD), Testimonials, Logos, Feature grid, Newsletter form (double opt-in).
+
+/about — H1: About {Brand}; H2s: Mission, Team, Timeline.
+
+Organization/LocalBusiness JSON-LD.
+
+/services — H1: Services; H2s: Category sections; H3s: Individual service cards.
+
+Use Service JSON-LD per service; pricing table with clear CTAs.
+
+/portfolio — H1: Portfolio; H2: Filters (tags: sector/tech/format); H3: Project cards.
+
+Each project details page /portfolio/{slug} with H1: Project title; BreadcrumbList JSON-LD.
+
+/blog — H1: Blog; H2: Latest posts; H3: Categories.
+
+Each post /blog/{slug}: Article/BlogPosting JSON-LD; author + publish date; ToC generated from H2s.
+
+/contact — H1: Contact; H2: Offices/Hours; H2: Form.
+
+Include map (static), mailto, tel links; spam protection + consent checkbox.
+
+Utility
+
+/privacy, /terms, /cookies, /accessibility
+
+/sitemap.xml, /robots.txt, /humans.txt, /.well-known/security.txt
+
+404 + 500 pages (link to popular pages; search box)
+
+Nav & URL rules
+
+Slugs: kebab-case, short, descriptive, canonicalised (lowercase).
+
+Breadcrumbs on depth ≥2.
+
+One H1 per page, semantic landmarks (header, nav, main, aside, footer).
+
+2) Wireframe Notes (per page essentials)
+
+Hero (Home)
+
+Left: H1 (concise benefit), supporting H2, primary CTA, secondary CTA (contrast-outlined).
+
+Right: Product image/video (lazy-loaded), trust badges.
+
+Below fold: 3-column features → case studies carousel → testimonial strip → CTA banner → FAQ.
+
+Services
+
+Filterable tabs (aria-controls), cards (title, 2-line summary, “Learn more” link), comparison table, CTA.
+
+Portfolio
+
+Tag filters (aria-pressed states), masonry grid (aspect-ratio enforced), project modal or details route.
+
+Blog
+
+List with cover, H2 title, excerpt, read time, tags, author chip.
+
+Post page: ToC (sticky, collapsible), share buttons (native share API with fallback), next/prev posts.
+
+Contact
+
+2-column: details + form. Form: name, email, message, consent; inline validation; success state with follow-up links.
+
+3) Style Guide (tokens, states, responsive)
+
+Color tokens (ensure WCAG 2.2 AA/AAA)
+
+--brand-primary, --brand-secondary, --accent
+
+Feedback: --success, --warning, --error
+
+Neutrals: --bg, --surface, --muted, --border, --text, --text-muted
+
+Light/Dark themes via :root[data-theme="light"|"dark"]; provide high-contrast toggle (prefers-contrast aware).
+
+Typography
+
+Display: H1 40/48, H2 32/40, H3 24/32, H4 20/28, Body 16/24, Small 14/20.
+
+System fallback stack; set font-feature-settings: "liga","kern","ss01" as needed; 1.5 line-height base.
+
+Components
+
+Buttons: primary (solid), secondary (outline), tertiary (text). Focus ring 2px visible, not only color.
+
+Inputs: 44px min height; labels always visible; error text with aria-live="polite".
+
+Cards: 8–12px radius, subtle shadow, 16–24px padding, hover lift (transform: translateY(-1px)), prefers-reduced-motion safe.
+
+Nav: sticky top, skip-to-content link first in DOM.
+
+Responsive breakpoints
+
+320, 375, 640, 768, 1024, 1280, 1440.
+
+Use container at 1280px; grid that collapses 3→2→1; clamp() for fluid type.
+
+States
+
+Hover/Focus/Active documented for links, buttons, chips, tabs (show visual + token mapping).
+
+Disabled ≠ lower contrast text; use opacity with tooltip “Unavailable”.
+
+4) Accessibility (WCAG 2.2 AA checklist)
+
+Keyboard: all interactive elements reachable; visible focus; logical tab order; :focus-visible.
+
+Color/contrast: text ≥ 4.5:1, large text ≥ 3:1; test in dark & high-contrast modes.
+
+Semantics: landmarks, headings order, lists for nav, <figure><figcaption>.
+
+Forms: labels, placeholders not labels, error prevention on important fields; aria-describedby for help/error.
+
+Media: captions/transcripts; prefers-reduced-motion and prefers-color-scheme.
+
+Drag-and-drop alternatives; pointer target size ≥44×44px.
+
+5) SEO & Performance
+
+On-page
+
+Unique titles (≤60 chars) + meta descriptions (≤155 chars).
+
+Canonical tags; Open Graph + Twitter Card; favicon + app icons; lang + dir attributes.
+
+Internal linking: descriptive anchors; breadcrumb markup.
+
+Structured Data (JSON-LD)
+
+Organization (+ logo), WebSite (+ potentialAction SearchAction), BreadcrumbList, Article/BlogPosting, Service, FAQPage, Product (if applicable).
+
+Technical
+
+robots.txt (allow default; disallow drafts), sitemap.xml auto-generated.
+
+Next/Image for responsive images; AVIF/WebP; loading="lazy"; decoding="async".
+
+HTTP caching: static 1y immutable; HTML 0-60s s-maxage on Vercel; route segment caching.
+
+Code-split with App Router; RSC where possible; edge runtime for light APIs.
+
+Core Web Vitals
+
+LCP: hero image preloaded; font display: swap.
+
+CLS: reserve space for images/ads; avoid layout shifts.
+
+INP: limit long tasks; hydrate only interactive islands; use useTransition for forms.
+
+6) Security & Privacy
+
+HTTPS everywhere; HSTS; secure cookies; SameSite=Lax/Strict as appropriate.
+
+CSP: default-src 'self'; script/img/font/connect whitelists; nonce or hashed inline.
+
+Input sanitisation (XSS/HTML injection); server-side validation mirrors client-side.
+
+Auth (if any): short-lived tokens; refresh rotation; RLS if using Supabase; rate limiting (per-IP + per-user).
+
+GDPR/CCPA: minimal data collection; consent banner with granular toggles; Do-Not-Track respected where feasible; privacy notice with retention table.
+
+7) Analytics & Feedback Loops
+
+GA4 or Plausible (privacy-friendly).
+
+KPIs: CTR on primary CTA, scroll depth, LCP/CLS/INP, bounce, session duration, blog signups, contact conversions.
+
+Events: view_hero, cta_primary_click, service_card_open, form_submit_success/fail.
+
+Session replay (optional, consent-gated): PostHog/FullStory.
+
+Feedback: /contact form + lightweight “Was this helpful?” on docs/blog; webhook to Slack/Email.
+
+8) Internationalisation (i18n)
+
+URL strategy: / default locale; /es/..., /fr/...; detect via Accept-Language (no forced redirects).
+
+Copy in message catalogs; avoid hard-coded strings; pluralisation aware.
+
+RTL support toggle + logical properties (margin-inline, padding-inline).
+
+Locale formats: dates, times, currency via Intl.
+
+Hreflang tags per translated page; language-specific sitemaps.
+
+9) Future-Ready Components & CMS
+
+Design system: Buttons, Inputs, Selects, Tabs, Accordions, Cards, Media, CTA banners, Testimonial, Pricing, Table, Breadcrumb, Pagination, Alert, Modal/Drawer, Toast.
+
+CMS: Sanity/Contentlayer/Notion sync; content types — Page, Post, Service, Project, Testimonial, FAQ.
+
+Extensibility: e-commerce (Products, Cart, Checkout), Members (/login, /account), Docs (/docs with sidebar).
+
+10) Testing Matrix
+
+Browsers: Chrome, Safari, Firefox, Edge (two latest major).
+
+Devices: iPhone small/large, Android small/large, iPad, 13" and 27" desktop.
+
+Checks: aXe/Pa11y (AA), Lighthouse ≥90 all categories, E2E (Playwright) for nav, forms, search, 404/500.
+
+11) Implementation Snippets (drop-in)
+
+JSON-LD (Organization + WebSite)
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "{Brand}",
+  "url": "https://www.example.com",
+  "logo": "https://www.example.com/logo.png",
+  "sameAs": ["https://www.linkedin.com/company/{brand}"]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "url": "https://www.example.com",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "https://www.example.com/search?q={search_term_string}",
+    "query-input": "required name=search_term_string"
+  }
+}
+</script>
+
+
+robots.txt (baseline)
+
+User-agent: *
+Disallow: /api/private
+Allow: /
+Sitemap: https://www.example.com/sitemap.xml
+
+
+Cookie banner essentials
+
+Separate toggles: Analytics, Marketing, Functional.
+
+Store consent in localStorage + cookie; block tags until consent true.
+
+12) Performance & Caching Strategy (Vercel)
+
+Static build for marketing pages; ISR for blog/services (revalidate: 60–300s).
+
+Edge functions for contact form (spam checks, rate limit).
+
+Image Optimization: device-aware sizes; explicit width/height; AVIF fallback to WebP/PNG.
+
+13) Deliverable Checklist
+
+ Final sitemap + breadcrumbs map
+
+ Wireframes (low-fi) for 6 core pages
+
+ Style guide tokens (light/dark/high-contrast) + component states
+
+ SEO kit: meta templates, JSON-LD, robots/sitemap
+
+ Accessibility report (WCAG 2.2 AA)
+
+ Analytics events plan + dashboards
+
+ Security review (CSP, headers, forms)
+
+ i18n plan + hreflang
+
+ Testing matrix & pass criteria
+
+If you share your brand palette & fonts, I’ll convert the tokens above into exact values (with contrast proofs) and tailor component examples to your look.
